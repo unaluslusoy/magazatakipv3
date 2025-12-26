@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schedules API Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .test-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .test-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .test-card h3 {
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .icon {
+            font-size: 24px;
+        }
+        
+        .input-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+        
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            width: 100%;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .result {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            margin-top: 30px;
+        }
+        
+        .result h2 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        #result-content {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            color: #333;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        
+        .success {
+            border-left: 4px solid #10b981;
+        }
+        
+        .error {
+            border-left: 4px solid #ef4444;
+        }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            margin-top: 10px;
+            transition: gap 0.3s ease;
+        }
+        
+        .back-link:hover {
+            gap: 12px;
+        }
+        
+        .token-display {
+            background: #f0f4f8;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-size: 12px;
+            word-break: break-all;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📅 Schedules API Test Dashboard</h1>
+            <p class="subtitle">Test schedule management endpoints</p>
+            <a href="index.html" class="back-link">← Ana Test Sayfasına Dön</a>
+            <div class="token-display" id="token-display">Token: Login yapılmadı</div>
+        </div>
+
+        <div class="test-grid">
+            <!-- Login -->
+            <div class="test-card">
+                <h3><span class="icon">🔐</span> Login</h3>
+                <div class="input-group">
+                    <label>Email</label>
+                    <input type="email" id="login-email" value="admin@magazapano.com">
+                </div>
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" value="Admin123!">
+                </div>
+                <button onclick="login()">Login</button>
+            </div>
+
+            <!-- Get All Schedules -->
+            <div class="test-card">
+                <h3><span class="icon">📋</span> Get All Schedules</h3>
+                <div class="input-group">
+                    <label>Page</label>
+                    <input type="number" id="page" value="1" min="1">
+                </div>
+                <div class="input-group">
+                    <label>Limit</label>
+                    <input type="number" id="limit" value="10" min="1">
+                </div>
+                <button onclick="getAllSchedules()">Get Schedules</button>
+            </div>
+
+            <!-- Get Currently Active -->
+            <div class="test-card">
+                <h3><span class="icon">✅</span> Get Active Schedules</h3>
+                <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                    Şu anda aktif olan zamanlamalar
+                </p>
+                <button onclick="getCurrentlyActive()">Get Active</button>
+            </div>
+
+            <!-- Create Schedule - Always -->
+            <div class="test-card">
+                <h3><span class="icon">➕</span> Create (Always)</h3>
+                <div class="input-group">
+                    <label>Playlist ID</label>
+                    <input type="number" id="create-always-playlist" value="1">
+                </div>
+                <button onclick="createAlways()">Create Always Schedule</button>
+            </div>
+
+            <!-- Create Schedule - Date Range -->
+            <div class="test-card">
+                <h3><span class="icon">📆</span> Create (Date Range)</h3>
+                <div class="input-group">
+                    <label>Playlist ID</label>
+                    <input type="number" id="create-range-playlist" value="1">
+                </div>
+                <div class="input-group">
+                    <label>Start Date</label>
+                    <input type="date" id="create-range-start" value="2025-02-01">
+                </div>
+                <div class="input-group">
+                    <label>End Date</label>
+                    <input type="date" id="create-range-end" value="2025-02-28">
+                </div>
+                <button onclick="createDateRange()">Create Date Range</button>
+            </div>
+
+            <!-- Create Schedule - Daily -->
+            <div class="test-card">
+                <h3><span class="icon">🕐</span> Create (Daily)</h3>
+                <div class="input-group">
+                    <label>Playlist ID</label>
+                    <input type="number" id="create-daily-playlist" value="1">
+                </div>
+                <div class="input-group">
+                    <label>Start Time</label>
+                    <input type="time" id="create-daily-start" value="09:00">
+                </div>
+                <div class="input-group">
+                    <label>End Time</label>
+                    <input type="time" id="create-daily-end" value="18:00">
+                </div>
+                <button onclick="createDaily()">Create Daily Schedule</button>
+            </div>
+
+            <!-- Create Schedule - Weekly -->
+            <div class="test-card">
+                <h3><span class="icon">📅</span> Create (Weekly)</h3>
+                <div class="input-group">
+                    <label>Playlist ID</label>
+                    <input type="number" id="create-weekly-playlist" value="1">
+                </div>
+                <div class="input-group">
+                    <label>Days (virgülle ayır: 0=Pzr)</label>
+                    <input type="text" id="create-weekly-days" value="1,2,3,4,5" placeholder="1,2,3,4,5">
+                </div>
+                <div class="input-group">
+                    <label>Start Time</label>
+                    <input type="time" id="create-weekly-start" value="09:00">
+                </div>
+                <div class="input-group">
+                    <label>End Time</label>
+                    <input type="time" id="create-weekly-end" value="18:00">
+                </div>
+                <button onclick="createWeekly()">Create Weekly Schedule</button>
+            </div>
+
+            <!-- Get Schedule by ID -->
+            <div class="test-card">
+                <h3><span class="icon">🔍</span> Get by ID</h3>
+                <div class="input-group">
+                    <label>Schedule ID</label>
+                    <input type="number" id="get-id" value="1" min="1">
+                </div>
+                <button onclick="getScheduleById()">Get Schedule</button>
+            </div>
+
+            <!-- Update Schedule -->
+            <div class="test-card">
+                <h3><span class="icon">✏️</span> Update Schedule</h3>
+                <div class="input-group">
+                    <label>Schedule ID</label>
+                    <input type="number" id="update-id" value="1">
+                </div>
+                <div class="input-group">
+                    <label>Is Active</label>
+                    <select id="update-active">
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </div>
+                <button onclick="updateSchedule()">Update</button>
+            </div>
+
+            <!-- Delete Schedule -->
+            <div class="test-card">
+                <h3><span class="icon">🗑️</span> Delete Schedule</h3>
+                <div class="input-group">
+                    <label>Schedule ID</label>
+                    <input type="number" id="delete-id" value="1">
+                </div>
+                <button onclick="deleteSchedule()" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">Delete</button>
+            </div>
+        </div>
+
+        <div class="result">
+            <h2>📤 API Response</h2>
+            <div id="result-content">
+                <pre>Henüz test yapılmadı...</pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+        let authToken = '';
+
+        function updateTokenDisplay() {
+            const display = document.getElementById('token-display');
+            if (authToken) {
+                display.textContent = `Token: ${authToken.substring(0, 20)}...`;
+                display.style.background = '#d1fae5';
+                display.style.color = '#065f46';
+            } else {
+                display.textContent = 'Token: Login yapılmadı';
+                display.style.background = '#fee2e2';
+                display.style.color = '#991b1b';
+            }
+        }
+
+        function showResult(data, success = true) {
+            const resultContent = document.getElementById('result-content');
+            const result = document.querySelector('.result');
+
+            result.className = 'result ' + (success ? 'success' : 'error');
+            resultContent.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+
+            result.scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest'
+            });
+        }
+
+        async function login() {
+            try {
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
+
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email,
+                        password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.data.accessToken) {
+                    authToken = data.data.accessToken;
+                    updateTokenDisplay();
+                    showResult(data, true);
+                } else {
+                    showResult(data, false);
+                }
+            } catch (error) {
+                showResult({
+                    error: error.message
+                }, false);
+            }
+        }
+
+        async function getAllSchedules() {
+            if (!authToken) {
+                showResult({
+                    error: 'Lütfen önce login yapın'
+                }, false);
+                return;
+            }
+
+            try {
+                const page = document.getElementById('page').value;
+                const limit = document.getElementById('limit').value;
+
+                const response = await fetch(`${API_URL}/schedules?page=${page}&limit=${limit}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                showResult(data, data.success);
+            } catch (error) {
+                showResult({
+                    error: error.message
+                }, false);
+            }
+        }
+
+        async function getCurrentlyActive() {
+            if (!authToken) {
+                showResult({
+                    error: 'Lütfen önce login yapın'
+                }, false);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/schedules/currently-active`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                showResult(data, data.success);
+            } catch (error) {
+                showResult({
+                    error: error.message
+                }, false);
+            }
+        }
+
+        async function createAlways() {
+            if (!authToken) {
+                showResult({
+                    error: 'Lütfen önce login yapın'
+                }, false);
+                return;
+            }
+
+            try {
+                const scheduleData = {
+                    playlist_id: parseInt(document.getElementById('create-always-playlist').value),
+                    schedule_type: 'always'
+                };
+
+                const response = await fetch(`${API_URL}/schedules`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(scheduleData)
+                });
+
+                const data = await response.json();
+                showResult(data, data.success);
+            } catch (error) {
+                showResult({
+                    error: error.message
+                }, false);
+            }
+        }
+
+        async function createDateRange() {
+            if (!authToken) {
+                showResult({
+                    error: 'Lütfen önce login yapın'
+                }, false);
+                return;
+            }
+
+            try {
+                const scheduleData = {
+                    playlist_id: parseInt(document.getElementById('create-range-playlist').value),
+                    schedule_type: 'date_range',
+                    start_date: document.getElementById('create-range-start').value,
+                    end_date: document.getElementById('create-range-end').value
+                };
+
+                const response = await fetch(`${API_URL}/schedules`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(scheduleData)
+                });
+
+                const data = await response.json();
+                showResult(data, data.success);
+            } catch (error) {
+                showResult({
+                    error: error.message
+                }, false);
+            }
+        }
+
+        async function createDaily() {
+            if (!authToken) {
+                showResult({
+                    error: 'Lütfen önce login yapın'
+                }, false);
+                return;
+            }
+
+            try {
+                const scheduleData = {
+                    playlist_id: parseInt(document.getElementById('create-daily-playlist').value),
+                    schedule_type: 'daily',
+                    start_time: document.getElementById('create-daily-start').value,
+                    end_time: document.getElementById('create-daily-end').value
+                };
+
+                const response = await fetch(`${API_URL}/schedules`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(scheduleData)
+                });
+
+                const data = await response.json();
+                showResult(data, data.success);
+            } catch (error) {
+                showResult({
+                    error: error.message
+                }, false);
+            }
+        }
+
+        async function createWeekly() {
+            if (!authToken) {
+                showResult({
+                    error: 'Lütfen önce login yapın'
+                }, false);
+                return;
+            }
+
+            try {
+                const daysInput = document.getElementById('create-weekly-days').value;
+                const days_of_week = daysInput.split(',').map(d => parseInt(d.trim()));
+
+                const scheduleData = {
+                    playlist_id: parseInt(document.getElementById('create-weekly-playlist').value),
+                    schedule_type: 'weekly',
+                    days_of_week: days_of_week,
+                    start_time: document.getElementById('create-weekly-start').value,
+                    end_time: document.getElementById('create-weekly-end').value
+                };
+
+                const response = await fetch(`${API_URL}/schedules`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(scheduleData)
+                });
+
+                const data = await response.json();
+                showResult(data, data.success);
+            } catch (error) {
+                showResult({
+                    error: error.message
+                }, false);
+            }
+        }
+
+        async function getScheduleById() {
+            if (!authToken) {
+                showResult({
+                    error: 'Lütfen önce login yapın'
+                }, false);
+                return;
+            }
+
+            try {
+                const id = document.getElementById('get-id').value;
+                const response = await fetch(`${API_URL}/schedules/${id}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                showResult(data, data.success);
+            } catch (error) {
+                showResult({
+                    error: error.message
+                }, false);
+            }
+        }
+
+        async function updateSchedule() {
+            if (!authToken) {
+                showResult({
+                    error: 'Lütfen önce login yapın'
+                }, false);
+                return;
+            }
+
+            try {
+                const id = document.getElementById('update-id').value;
+                const updateData = {
+                    is_active: document.getElementById('update-active').value === 'true'
+                };
+
+                const response = await fetch(`${API_URL}/schedules/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(updateData)
+                });
+
+                const data = await response.json();
+                showResult(data, data.success);
+            } catch (error) {
+                showResult({
+                    error: error.message
+                }, false);
+            }
+        }
+
+        async function deleteSchedule() {
+            if (!authToken) {
+                showResult({
+                    error: 'Lütfen önce login yapın'
+                }, false);
+                return;
+            }
+
+            const id = document.getElementById('delete-id').value;
+            if (!confirm(`Schedule ID ${id} silinecek. Emin misiniz?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/schedules/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                showResult(data, data.success);
+            } catch (error) {
+                showResult({
+                    error: error.message
+                }, false);
+            }
+        }
+
+        updateTokenDisplay();
+    </script>
+</body>
+
+</html>

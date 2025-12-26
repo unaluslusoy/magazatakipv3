@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/public/favicon.svg">
+    <title>Stores API Test - MağazaPano</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #4CAF50;
+            text-decoration: none;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .section h2 {
+            color: #555;
+            margin-bottom: 15px;
+            font-size: 18px;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-primary {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .btn-info {
+            background: #2196F3;
+            color: white;
+        }
+        
+        .btn-warning {
+            background: #FF9800;
+            color: white;
+        }
+        
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #607D8B;
+            color: white;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        textarea {
+            min-height: 60px;
+            resize: vertical;
+        }
+        
+        .output {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .status {
+            padding: 5px 10px;
+            border-radius: 3px;
+            display: inline-block;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        
+        .status-success {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .status-error {
+            background: #f44336;
+            color: white;
+        }
+        
+        .inline-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
+        .auth-status {
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        
+        .token-display {
+            font-size: 12px;
+            color: #666;
+            word-break: break-all;
+            max-height: 60px;
+            overflow-y: auto;
+            background: #f5f5f5;
+            padding: 8px;
+            border-radius: 3px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">← Ana Sayfaya Dön</a>
+        <h1>🏪 Stores API Test - MağazaPano</h1>
+
+        <!-- AUTH STATUS -->
+        <div class="section">
+            <h2>🔐 Kimlik Doğrulama Durumu</h2>
+            <div class="auth-status" id="authStatus">
+                <strong>Durum:</strong> <span id="authStatusText">Giriş yapılmadı</span>
+                <div class="token-display" id="tokenDisplay" style="display: none;"></div>
+            </div>
+            <div class="btn-group">
+                <button class="btn-primary" onclick="quickLogin()">⚡ Hızlı Giriş (Admin)</button>
+                <button class="btn-secondary" onclick="checkAuth()">🔍 Kimlik Durumunu Kontrol Et</button>
+            </div>
+        </div>
+
+        <!-- GET ALL STORES -->
+        <div class="section">
+            <h2>🏪 Tüm Mağazaları Listele</h2>
+            <div class="inline-fields">
+                <div class="form-group">
+                    <label>Durum Filtresi:</label>
+                    <select id="filterActive">
+                        <option value="">Tümü</option>
+                        <option value="true">Aktif</option>
+                        <option value="false">Pasif</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Şehir:</label>
+                    <select id="filterCity">
+                        <option value="">Tümü</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Arama:</label>
+                <input type="text" id="filterSearch" placeholder="Mağaza adı, kod veya adres...">
+            </div>
+            <div class="btn-group">
+                <button class="btn-info" onclick="getAllStores()">📥 Mağazaları Getir</button>
+                <button class="btn-info" onclick="getStoreStats()">📊 İstatistikler</button>
+                <button class="btn-info" onclick="getCities()">🌍 Şehirleri Getir</button>
+            </div>
+            <div class="output" id="getAllOutput"></div>
+        </div>
+
+        <!-- CREATE STORE -->
+        <div class="section">
+            <h2>➕ Yeni Mağaza Oluştur</h2>
+            <div class="inline-fields">
+                <div class="form-group">
+                    <label>Mağaza Kodu: *</label>
+                    <input type="text" id="createCode" placeholder="MAG-001">
+                </div>
+                <div class="form-group">
+                    <label>Mağaza Adı: *</label>
+                    <input type="text" id="createName" placeholder="Merkez Mağaza">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Adres:</label>
+                <textarea id="createAddress" placeholder="Tam adres..."></textarea>
+            </div>
+            <div class="inline-fields">
+                <div class="form-group">
+                    <label>Şehir:</label>
+                    <input type="text" id="createCity" placeholder="İstanbul">
+                </div>
+                <div class="form-group">
+                    <label>Bölge/İlçe:</label>
+                    <input type="text" id="createRegion" placeholder="Kadıköy">
+                </div>
+            </div>
+            <div class="inline-fields">
+                <div class="form-group">
+                    <label>Telefon:</label>
+                    <input type="text" id="createPhone" placeholder="0212 123 45 67">
+                </div>
+                <div class="form-group">
+                    <label>E-posta:</label>
+                    <input type="email" id="createEmail" placeholder="magaza@example.com">
+                </div>
+            </div>
+            <div class="inline-fields">
+                <div class="form-group">
+                    <label>Müdür Adı:</label>
+                    <input type="text" id="createManager" placeholder="Ahmet Yılmaz">
+                </div>
+                <div class="form-group">
+                    <label>Durum:</label>
+                    <select id="createActive">
+                        <option value="true">Aktif</option>
+                        <option value="false">Pasif</option>
+                    </select>
+                </div>
+            </div>
+            <div class="inline-fields">
+                <div class="form-group">
+                    <label>Açılış Saati:</label>
+                    <input type="time" id="createOpenTime" disabled>
+                </div>
+                <div class="form-group">
+                    <label>Kapanış Saati:</label>
+                    <input type="time" id="createCloseTime" disabled>
+                </div>
+            </div>
+            <div class="btn-group">
+                <button class="btn-primary" onclick="createStore()">💾 Mağaza Oluştur</button>
+            </div>
+            <div class="output" id="createOutput"></div>
+        </div>
+
+        <!-- GET SINGLE STORE -->
+        <div class="section">
+            <h2>🔍 Tek Mağaza Getir</h2>
+            <div class="form-group">
+                <label>Mağaza ID:</label>
+                <input type="number" id="getStoreId" placeholder="1">
+            </div>
+            <div class="btn-group">
+                <button class="btn-info" onclick="getStoreById()">🔎 Mağazayı Getir</button>
+            </div>
+            <div class="output" id="getByIdOutput"></div>
+        </div>
+
+        <!-- UPDATE STORE -->
+        <div class="section">
+            <h2>✏️ Mağaza Güncelle</h2>
+            <div class="inline-fields">
+                <div class="form-group">
+                    <label>Mağaza ID: *</label>
+                    <input type="number" id="updateId" placeholder="1">
+                </div>
+                <div class="form-group">
+                    <label>Yeni Mağaza Adı:</label>
+                    <input type="text" id="updateName" placeholder="Güncellenmiş ad">
+                </div>
+            </div>
+            <div class="inline-fields">
+                <div class="form-group">
+                    <label>Yeni Şehir:</label>
+                    <input type="text" id="updateCity" placeholder="Ankara">
+                </div>
+                <div class="form-group">
+                    <label>Yeni Durum:</label>
+                    <select id="updateActive">
+                        <option value="">Değiştirme</option>
+                        <option value="true">Aktif</option>
+                        <option value="false">Pasif</option>
+                    </select>
+                </div>
+            </div>
+            <div class="btn-group">
+                <button class="btn-warning" onclick="updateStore()">🔄 Mağazayı Güncelle</button>
+            </div>
+            <div class="output" id="updateOutput"></div>
+        </div>
+
+        <!-- DELETE STORE -->
+        <div class="section">
+            <h2>🗑️ Mağaza Sil</h2>
+            <div class="form-group">
+                <label>Mağaza ID: *</label>
+                <input type="number" id="deleteId" placeholder="1">
+            </div>
+            <div class="btn-group">
+                <button class="btn-danger" onclick="deleteStore()">❌ Mağazayı Sil</button>
+            </div>
+            <div class="output" id="deleteOutput"></div>
+        </div>
+
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+        let accessToken = localStorage.getItem('accessToken');
+
+        // Display response
+        function displayResponse(elementId, response) {
+            const output = document.getElementById(elementId);
+            const jsonStr = JSON.stringify(response, null, 2);
+            const statusClass = response.success ? 'status-success' : 'status-error';
+            const statusText = response.success ? '✅ Başarılı' : '❌ Hata';
+
+            output.innerHTML = `
+                <div class="status ${statusClass}">${statusText}</div>
+                <pre>${jsonStr}</pre>
+            `;
+        }
+
+        // Update auth status
+        function updateAuthStatus() {
+            const statusEl = document.getElementById('authStatusText');
+            const tokenEl = document.getElementById('tokenDisplay');
+
+            if (accessToken) {
+                statusEl.textContent = '✅ Giriş yapıldı';
+                statusEl.style.color = '#4CAF50';
+                tokenEl.style.display = 'block';
+                tokenEl.textContent = `Token: ${accessToken.substring(0, 50)}...`;
+            } else {
+                statusEl.textContent = '❌ Giriş yapılmadı';
+                statusEl.style.color = '#f44336';
+                tokenEl.style.display = 'none';
+            }
+        }
+
+        // Quick login
+        async function quickLogin() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@magazapano.com',
+                        password: 'Admin123!'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    accessToken = data.data.accessToken;
+                    localStorage.setItem('accessToken', accessToken);
+                    updateAuthStatus();
+                    alert('✅ Giriş başarılı!');
+                } else {
+                    alert('❌ Giriş başarısız: ' + data.message);
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
+        }
+
+        // Check auth
+        async function checkAuth() {
+            if (!accessToken) {
+                alert('❌ Lütfen önce giriş yapın!');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                const data = await response.json();
+                alert(data.success ?
+                    `✅ Kimlik doğrulandı: ${data.data.user.email} (${data.data.user.role})` :
+                    '❌ Kimlik doğrulanamadı: ' + data.message
+                );
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
+        }
+
+        // Get all stores
+        async function getAllStores() {
+            if (!accessToken) {
+                alert('❌ Lütfen önce giriş yapın!');
+                return;
+            }
+
+            try {
+                const params = new URLSearchParams();
+                const active = document.getElementById('filterActive').value;
+                const city = document.getElementById('filterCity').value;
+                const search = document.getElementById('filterSearch').value;
+
+                if (active) params.append('is_active', active);
+                if (city) params.append('city', city);
+                if (search) params.append('search', search);
+
+                const response = await fetch(`${API_BASE}/stores?${params}`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                const data = await response.json();
+                displayResponse('getAllOutput', data);
+            } catch (error) {
+                displayResponse('getAllOutput', {
+                    success: false,
+                    message: error.message
+                });
+            }
+        }
+
+        // Get store stats
+        async function getStoreStats() {
+            if (!accessToken) {
+                alert('❌ Lütfen önce giriş yapın!');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/stores/stats`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                const data = await response.json();
+                displayResponse('getAllOutput', data);
+            } catch (error) {
+                displayResponse('getAllOutput', {
+                    success: false,
+                    message: error.message
+                });
+            }
+        }
+
+        // Get cities
+        async function getCities() {
+            if (!accessToken) {
+                alert('❌ Lütfen önce giriş yapın!');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/stores/cities`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                // Update filter dropdown
+                if (data.success && data.data.cities) {
+                    const select = document.getElementById('filterCity');
+                    select.innerHTML = '<option value="">Tümü</option>';
+                    data.data.cities.forEach(city => {
+                        const option = document.createElement('option');
+                        option.value = city;
+                        option.textContent = city;
+                        select.appendChild(option);
+                    });
+                }
+
+                displayResponse('getAllOutput', data);
+            } catch (error) {
+                displayResponse('getAllOutput', {
+                    success: false,
+                    message: error.message
+                });
+            }
+        }
+
+        // Create store
+        async function createStore() {
+            if (!accessToken) {
+                alert('❌ Lütfen önce giriş yapın!');
+                return;
+            }
+
+            const code = document.getElementById('createCode').value;
+            const name = document.getElementById('createName').value;
+
+            if (!code || !name) {
+                alert('❌ Mağaza kodu ve adı gereklidir!');
+                return;
+            }
+
+            try {
+                const storeData = {
+                    code,
+                    name,
+                    address: document.getElementById('createAddress').value || null,
+                    city: document.getElementById('createCity').value || null,
+                    region: document.getElementById('createRegion').value || null,
+                    phone: document.getElementById('createPhone').value || null,
+                    email: document.getElementById('createEmail').value || null,
+                    manager_name: document.getElementById('createManager').value || null,
+                    is_active: document.getElementById('createActive').value === 'true'
+                };
+
+                const response = await fetch(`${API_BASE}/stores`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify(storeData)
+                });
+
+                const data = await response.json();
+                displayResponse('createOutput', data);
+            } catch (error) {
+                displayResponse('createOutput', {
+                    success: false,
+                    message: error.message
+                });
+            }
+        }
+
+        // Get store by ID
+        async function getStoreById() {
+            if (!accessToken) {
+                alert('❌ Lütfen önce giriş yapın!');
+                return;
+            }
+
+            const id = document.getElementById('getStoreId').value;
+            if (!id) {
+                alert('❌ Mağaza ID gereklidir!');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/stores/${id}`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                const data = await response.json();
+                displayResponse('getByIdOutput', data);
+            } catch (error) {
+                displayResponse('getByIdOutput', {
+                    success: false,
+                    message: error.message
+                });
+            }
+        }
+
+        // Update store
+        async function updateStore() {
+            if (!accessToken) {
+                alert('❌ Lütfen önce giriş yapın!');
+                return;
+            }
+
+            const id = document.getElementById('updateId').value;
+            if (!id) {
+                alert('❌ Mağaza ID gereklidir!');
+                return;
+            }
+
+            try {
+                const updateData = {};
+                const name = document.getElementById('updateName').value;
+                const city = document.getElementById('updateCity').value;
+                const active = document.getElementById('updateActive').value;
+
+                if (name) updateData.name = name;
+                if (city) updateData.city = city;
+                if (active) updateData.is_active = active === 'true';
+
+                if (Object.keys(updateData).length === 0) {
+                    alert('❌ En az bir alan güncellenmelidir!');
+                    return;
+                }
+
+                const response = await fetch(`${API_BASE}/stores/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify(updateData)
+                });
+
+                const data = await response.json();
+                displayResponse('updateOutput', data);
+            } catch (error) {
+                displayResponse('updateOutput', {
+                    success: false,
+                    message: error.message
+                });
+            }
+        }
+
+        // Delete store
+        async function deleteStore() {
+            if (!accessToken) {
+                alert('❌ Lütfen önce giriş yapın!');
+                return;
+            }
+
+            const id = document.getElementById('deleteId').value;
+            if (!id) {
+                alert('❌ Mağaza ID gereklidir!');
+                return;
+            }
+
+            if (!confirm(`${id} numaralı mağazayı silmek istediğinizden emin misiniz?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/stores/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                const data = await response.json();
+                displayResponse('deleteOutput', data);
+            } catch (error) {
+                displayResponse('deleteOutput', {
+                    success: false,
+                    message: error.message
+                });
+            }
+        }
+
+        // Initialize
+        updateAuthStatus();
+    </script>
+</body>
+
+</html>

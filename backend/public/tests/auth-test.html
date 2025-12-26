@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/public/favicon.svg">
+    <title>MağazaPano API Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        h1 {
+            color: #333;
+        }
+        
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        button.success {
+            background: #28a745;
+        }
+        
+        button.danger {
+            background: #dc3545;
+        }
+        
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px;
+            width: 250px;
+        }
+        
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            border-left: 4px solid #007bff;
+        }
+        
+        .success {
+            color: #28a745;
+        }
+        
+        .error {
+            color: #dc3545;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🚀 MağazaPano Authentication API Test</h1>
+
+    <div class="section">
+        <h2>1. Login</h2>
+        <div>
+            <input type="email" id="loginEmail" placeholder="Email" value="admin@magazapano.com">
+            <input type="password" id="loginPassword" placeholder="Password" value="Admin123!">
+            <button onclick="login()">Login</button>
+        </div>
+        <pre id="loginResponse">Sonuç burada görünecek...</pre>
+    </div>
+
+    <div class="section">
+        <h2>2. Get Current User</h2>
+        <button onclick="getCurrentUser()" class="success">Get /api/auth/me</button>
+        <pre id="meResponse">Önce login olmalısınız...</pre>
+    </div>
+
+    <div class="section">
+        <h2>3. Update Profile</h2>
+        <div>
+            <input type="text" id="profileName" placeholder="New Name" value="Admin User Updated">
+            <button onclick="updateProfile()" class="success">Update Profile</button>
+        </div>
+        <pre id="profileResponse">Sonuç burada görünecek...</pre>
+    </div>
+
+    <div class="section">
+        <h2>4. Logout</h2>
+        <button onclick="logout()" class="danger">Logout</button>
+        <pre id="logoutResponse">Sonuç burada görünecek...</pre>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+        let accessToken = null;
+
+        async function login() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email,
+                        password
+                    }),
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+                document.getElementById('loginResponse').innerHTML = JSON.stringify(data, null, 2);
+
+                if (data.success && data.data.accessToken) {
+                    accessToken = data.data.accessToken;
+                    document.getElementById('loginResponse').innerHTML =
+                        `<span class="success">✅ Login başarılı!</span>\n\n` +
+                        JSON.stringify(data, null, 2);
+                } else {
+                    document.getElementById('loginResponse').innerHTML =
+                        `<span class="error">❌ Login başarısız!</span>\n\n` +
+                        JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                document.getElementById('loginResponse').innerHTML =
+                    `<span class="error">❌ Hata: ${error.message}</span>`;
+            }
+        }
+
+        async function getCurrentUser() {
+            if (!accessToken) {
+                document.getElementById('meResponse').innerHTML =
+                    '<span class="error">❌ Önce login olmalısınız!</span>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/auth/me`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+                document.getElementById('meResponse').innerHTML =
+                    `<span class="success">✅ Kullanıcı bilgileri alındı!</span>\n\n` +
+                    JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('meResponse').innerHTML =
+                    `<span class="error">❌ Hata: ${error.message}</span>`;
+            }
+        }
+
+        async function updateProfile() {
+            if (!accessToken) {
+                alert('Önce login olmalısınız!');
+                return;
+            }
+
+            const name = document.getElementById('profileName').value;
+
+            try {
+                const response = await fetch(`${API_URL}/auth/profile`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({
+                        name
+                    }),
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+                document.getElementById('profileResponse').innerHTML =
+                    `<span class="success">✅ Profil güncellendi!</span>\n\n` +
+                    JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('profileResponse').innerHTML =
+                    `<span class="error">❌ Hata: ${error.message}</span>`;
+            }
+        }
+
+        async function logout() {
+            if (!accessToken) {
+                alert('Zaten logout durumdasınız!');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/auth/logout`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+                document.getElementById('logoutResponse').innerHTML =
+                    `<span class="success">✅ Logout başarılı!</span>\n\n` +
+                    JSON.stringify(data, null, 2);
+
+                accessToken = null;
+            } catch (error) {
+                document.getElementById('logoutResponse').innerHTML =
+                    `<span class="error">❌ Hata: ${error.message}</span>`;
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket.IO Test Dashboard</title>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .status-bar {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: #f0f4f8;
+            border-radius: 8px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-online {
+            background: #10b981;
+        }
+        
+        .status-offline {
+            background: #ef4444;
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0%,
+            100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .input-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        input,
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            width: 100%;
+            transition: transform 0.2s ease;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .log-container {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        
+        .log-info {
+            background: rgba(59, 130, 246, 0.1);
+            color: #60a5fa;
+        }
+        
+        .log-success {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+        }
+        
+        .log-error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+        
+        .log-event {
+            background: rgba(168, 85, 247, 0.1);
+            color: #a855f7;
+        }
+        
+        .event-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .event-button {
+            background: #f0f4f8;
+            color: #334155;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .event-button:hover {
+            border-color: #667eea;
+            background: #f8fafc;
+        }
+        
+        .event-button.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            margin-top: 10px;
+        }
+        
+        .json-view {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔌 Socket.IO Real-Time Test</h1>
+            <p style="color: #666; margin-top: 5px;">MağazaPano - WebSocket Connection Testing</p>
+            <a href="index.html" class="back-link">← Ana Test Sayfasına Dön</a>
+
+            <div class="status-bar">
+                <div class="status-item">
+                    <div class="status-indicator status-offline" id="status-indicator"></div>
+                    <span id="status-text">Disconnected</span>
+                </div>
+                <div class="status-item">
+                    <span>Socket ID: <strong id="socket-id">-</strong></span>
+                </div>
+                <div class="status-item">
+                    <span>Device Code: <strong id="device-code-display">-</strong></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- Connection Panel -->
+            <div class="card">
+                <h2>🔐 Connection Setup</h2>
+
+                <div class="input-group">
+                    <label>Email</label>
+                    <input type="email" id="login-email" value="admin@magazapano.com">
+                </div>
+
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" value="Admin123!">
+                </div>
+
+                <div class="input-group">
+                    <label>Device Code (opsiyonel - cihaz simülasyonu için)</label>
+                    <input type="text" id="device-code" placeholder="DEVICE001">
+                </div>
+
+                <button onclick="connect()" id="connect-btn">Connect to Socket.IO</button>
+                <button onclick="disconnect()" id="disconnect-btn" style="margin-top: 10px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);" disabled>Disconnect</button>
+            </div>
+
+            <!-- Device Actions -->
+            <div class="card">
+                <h2>📱 Device Actions</h2>
+
+                <div class="event-grid">
+                    <button class="event-button" onclick="sendHeartbeat()" id="heartbeat-btn" disabled>
+                        💓 Heartbeat
+                    </button>
+                    <button class="event-button" onclick="requestSync()" id="sync-btn" disabled>
+                        🔄 Request Sync
+                    </button>
+                    <button class="event-button" onclick="sendPlaybackStatus()" id="playback-btn" disabled>
+                        ▶️ Playback Status
+                    </button>
+                    <button class="event-button" onclick="sendError()" id="error-btn" disabled>
+                        ❌ Send Error
+                    </button>
+                </div>
+
+                <div class="input-group" style="margin-top: 20px;">
+                    <label>Custom Event Name</label>
+                    <input type="text" id="custom-event" placeholder="custom:event">
+                </div>
+
+                <div class="input-group">
+                    <label>Custom Data (JSON)</label>
+                    <input type="text" id="custom-data" placeholder='{"key": "value"}'>
+                </div>
+
+                <button onclick="sendCustomEvent()" id="custom-btn" disabled>Send Custom Event</button>
+            </div>
+        </div>
+
+        <!-- Event Log -->
+        <div class="card">
+            <h2>📋 Event Log</h2>
+            <button onclick="clearLog()" style="width: auto; float: right; padding: 8px 16px; font-size: 12px;">Clear Log</button>
+            <div style="clear: both;"></div>
+            <div class="log-container" id="log-container">
+                <div class="log-entry log-info">Waiting for connection...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000';
+        const SOCKET_URL = 'http://localhost:3000';
+
+        let socket = null;
+        let token = null;
+        let deviceCode = null;
+
+        function log(message, type = 'info') {
+            const logContainer = document.getElementById('log-container');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log-container').innerHTML = '';
+            log('Log cleared', 'info');
+        }
+
+        function updateStatus(connected) {
+            const indicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('status-text');
+            const buttons = ['heartbeat-btn', 'sync-btn', 'playback-btn', 'error-btn', 'custom-btn'];
+
+            if (connected) {
+                indicator.className = 'status-indicator status-online';
+                statusText.textContent = 'Connected';
+                document.getElementById('connect-btn').disabled = true;
+                document.getElementById('disconnect-btn').disabled = false;
+                buttons.forEach(id => document.getElementById(id).disabled = false);
+            } else {
+                indicator.className = 'status-indicator status-offline';
+                statusText.textContent = 'Disconnected';
+                document.getElementById('socket-id').textContent = '-';
+                document.getElementById('connect-btn').disabled = false;
+                document.getElementById('disconnect-btn').disabled = true;
+                buttons.forEach(id => document.getElementById(id).disabled = true);
+            }
+        }
+
+        async function connect() {
+            try {
+                // Get token first
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
+                deviceCode = document.getElementById('device-code').value || null;
+
+                log('Logging in...', 'info');
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email,
+                        password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!data.success || !data.data.accessToken) {
+                    log(`Login failed: ${data.message}`, 'error');
+                    return;
+                }
+
+                token = data.data.accessToken;
+                log('Login successful ✓', 'success');
+
+                // Connect to Socket.IO
+                log('Connecting to Socket.IO...', 'info');
+
+                const auth = {
+                    token
+                };
+                if (deviceCode) {
+                    auth.device_code = deviceCode;
+                    document.getElementById('device-code-display').textContent = deviceCode;
+                }
+
+                socket = io(SOCKET_URL, {
+                    auth,
+                    transports: ['websocket', 'polling']
+                });
+
+                // Event handlers
+                socket.on('connect', () => {
+                    log(`Connected! Socket ID: ${socket.id}`, 'success');
+                    document.getElementById('socket-id').textContent = socket.id;
+                    updateStatus(true);
+                });
+
+                socket.on('connected', (data) => {
+                    log(`Server welcome: ${data.message}`, 'event');
+                });
+
+                socket.on('device:config', (data) => {
+                    log(`Device config received`, 'event');
+                    log(JSON.stringify(data, null, 2), 'info');
+                });
+
+                socket.on('playlist:updated', (data) => {
+                    log(`Playlist updated! ID: ${data.playlist_id}`, 'event');
+                    log(data.message, 'info');
+                });
+
+                socket.on('sync:response', (data) => {
+                    log(`Sync response received`, 'event');
+                    if (data.success) {
+                        log(`Sync successful - Playlist loaded`, 'success');
+                    } else {
+                        log(`Sync failed: ${data.message}`, 'error');
+                    }
+                });
+
+                socket.on('heartbeat:ack', (data) => {
+                    log(`Heartbeat acknowledged`, 'success');
+                });
+
+                socket.on('playback:ack', (data) => {
+                    log(`Playback status acknowledged`, 'success');
+                });
+
+                socket.on('error:ack', (data) => {
+                    log(`Error report acknowledged`, 'success');
+                });
+
+                socket.on('error', (error) => {
+                    log(`Socket error: ${error.message || error}`, 'error');
+                });
+
+                socket.on('disconnect', (reason) => {
+                    log(`Disconnected: ${reason}`, 'error');
+                    updateStatus(false);
+                });
+
+            } catch (error) {
+                log(`Connection error: ${error.message}`, 'error');
+            }
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                log('Disconnecting...', 'info');
+                updateStatus(false);
+            }
+        }
+
+        function sendHeartbeat() {
+            if (!socket || !socket.connected) {
+                log('Not connected!', 'error');
+                return;
+            }
+
+            const data = {
+                cpu_usage: Math.floor(Math.random() * 100),
+                memory_usage: Math.floor(Math.random() * 100),
+                storage_free: Math.floor(Math.random() * 10000),
+                current_content_id: 1,
+                playback_position: Math.floor(Math.random() * 1000)
+            };
+
+            socket.emit('heartbeat', data);
+            log(`Heartbeat sent: CPU ${data.cpu_usage}%, MEM ${data.memory_usage}%`, 'event');
+        }
+
+        function requestSync() {
+            if (!socket || !socket.connected) {
+                log('Not connected!', 'error');
+                return;
+            }
+
+            socket.emit('sync:request', {
+                timestamp: new Date().toISOString()
+            });
+            log('Sync requested', 'event');
+        }
+
+        function sendPlaybackStatus() {
+            if (!socket || !socket.connected) {
+                log('Not connected!', 'error');
+                return;
+            }
+
+            const data = {
+                content_id: 1,
+                status: 'playing',
+                position: Math.floor(Math.random() * 1000),
+                duration: 1500
+            };
+
+            socket.emit('playback:status', data);
+            log('Playback status sent', 'event');
+        }
+
+        function sendError() {
+            if (!socket || !socket.connected) {
+                log('Not connected!', 'error');
+                return;
+            }
+
+            const data = {
+                error_type: 'playback_error',
+                message: 'Simulated error for testing',
+                content_id: 1
+            };
+
+            socket.emit('error:report', data);
+            log('Error report sent', 'event');
+        }
+
+        function sendCustomEvent() {
+            if (!socket || !socket.connected) {
+                log('Not connected!', 'error');
+                return;
+            }
+
+            const eventName = document.getElementById('custom-event').value;
+            const dataStr = document.getElementById('custom-data').value;
+
+            if (!eventName) {
+                log('Event name required!', 'error');
+                return;
+            }
+
+            let data = {};
+            try {
+                data = dataStr ? JSON.parse(dataStr) : {};
+            } catch (e) {
+                log('Invalid JSON data!', 'error');
+                return;
+            }
+
+            socket.emit(eventName, data);
+            log(`Custom event sent: ${eventName}`, 'event');
+        }
+
+        // Initialize
+        updateStatus(false);
+    </script>
+</body>
+
+</html>
