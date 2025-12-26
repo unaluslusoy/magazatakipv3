@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Image,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -58,11 +57,7 @@ const LoginScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Image
-          source={require('../../assets/logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <Text style={styles.logoText}>📺</Text>
 
         <Text style={styles.title}>Mağaza Panel</Text>
         <Text style={styles.subtitle}>TV Oynatıcı</Text>
@@ -112,6 +107,10 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     marginBottom: 30,
+  },
+  logoText: {
+    fontSize: 120,
+    marginBottom: 20,
   },
   title: {
     fontSize: 48,
