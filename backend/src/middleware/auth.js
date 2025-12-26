@@ -31,13 +31,29 @@ const authMiddleware = async(req, res, next) => {
             audience: jwtConfig.audience
         });
 
-        // Attach user to request
+        // Check if device token
+        if (decoded.type === 'device') {
+            const authService = require('../services/authService');
+            const device = await authService.verifyDeviceToken(token);
+            
+            req.device = device;
+            req.isDevice = true;
+            req.user = {
+                storeId: device.store_id,
+                role: 'device'
+            };
+            
+            return next();
+        }
+
+        // Regular user token
         req.user = {
             userId: decoded.userId,
             email: decoded.email,
             role: decoded.role,
             storeId: decoded.storeId
         };
+        req.isDevice = false;
 
         logger.debug('User authenticated:', {
             email: req.user.email,

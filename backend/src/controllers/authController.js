@@ -223,6 +223,58 @@ class AuthController {
             return errorResponse(res, error.message, 400);
         }
     }
+
+    /**
+     * POST /api/auth/device-login
+     * Cihaz girişi (TV/Tablet için)
+     */
+    async deviceLogin(req, res, next) {
+        try {
+            const { device_code } = req.body;
+
+            // Validasyon
+            if (!device_code) {
+                return errorResponse(res, 'Cihaz kodu gereklidir', 400);
+            }
+
+            // Device login işlemi
+            const result = await authService.deviceLogin(device_code);
+
+            return successResponse(res, {
+                message: 'Cihaz girişi başarılı',
+                token: result.token,
+                device: result.device,
+                expires_at: result.expiresAt
+            });
+        } catch (error) {
+            logger.error('Device login controller error:', error);
+            return errorResponse(res, error.message, 401);
+        }
+    }
+
+    /**
+     * GET /api/auth/verify
+     * Token doğrulama (device için)
+     */
+    async verifyDevice(req, res, next) {
+        try {
+            const device = req.device;
+
+            return successResponse(res, {
+                message: 'Token geçerli',
+                device: {
+                    id: device.id,
+                    device_code: device.device_code,
+                    device_name: device.device_name,
+                    store_id: device.store_id,
+                    status: device.status
+                }
+            });
+        } catch (error) {
+            logger.error('Verify device controller error:', error);
+            return errorResponse(res, error.message, 401);
+        }
+    }
 }
 
 module.exports = new AuthController();

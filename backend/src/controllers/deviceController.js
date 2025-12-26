@@ -166,6 +166,97 @@ class DeviceController {
             return errorResponse(res, error.message, 500);
         }
     }
+
+    /**
+     * POST /api/devices/heartbeat
+     * Cihaz heartbeat (canlılık sinyali)
+     */
+    async heartbeat(req, res) {
+        try {
+            if (!req.device) {
+                return errorResponse(res, 'Cihaz bilgisi bulunamadı', 401);
+            }
+
+            // Update last_seen
+            await req.device.update({ 
+                last_seen: new Date(),
+                status: 'active'
+            });
+
+            logger.debug(`Heartbeat received from device: ${req.device.device_code}`);
+
+            return successResponse(res, { 
+                message: 'Heartbeat alındı',
+                server_time: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error('Heartbeat controller error:', error);
+            return errorResponse(res, error.message, 500);
+        }
+    }
+
+    /**
+     * PUT /api/devices/status
+     * Cihaz durumunu güncelle
+     */
+    async updateStatus(req, res) {
+        try {
+            if (!req.device) {
+                return errorResponse(res, 'Cihaz bilgisi bulunamadı', 401);
+            }
+
+            const { status } = req.body;
+
+            if (!status || !['active', 'inactive', 'offline'].includes(status)) {
+                return errorResponse(res, 'Geçersiz durum değeri', 400);
+            }
+
+            await req.device.update({ status });
+
+            logger.info(`Device status updated: ${req.device.device_code} -> ${status}`);
+
+            return successResponse(res, {
+                message: 'Durum güncellendi',
+                device: req.device
+            });
+        } catch (error) {
+            logger.error('Update device status controller error:', error);
+            return errorResponse(res, error.message, 500);
+        }
+    }
+
+    /**
+     * POST /api/devices/logs
+     * Cihazdan log gönderimi
+     */
+    async sendLog(req, res) {
+        try {
+            if (!req.device) {
+                return errorResponse(res, 'Cihaz bilgisi bulunamadı', 401);
+            }
+
+            const { level, message, data, timestamp } = req.body;
+
+            // Log to server logger
+            const logMessage = `[DEVICE:${req.device.device_code}] ${message}`;
+            
+            if (level === 'error') {
+                logger.error(logMessage, data);
+            } else if (level === 'warning') {
+                logger.warn(logMessage, data);
+            } else {
+                logger.info(logMessage, data);
+            }
+
+            // TODO: Save to database if needed
+            // await DeviceLog.create({ device_id: req.device.id, level, message, data, timestamp });
+
+            return successResponse(res, { message: 'Log kaydedildi' });
+        } catch (error) {
+            logger.error('Device send log controller error:', error);
+            return errorResponse(res, error.message, 500);
+        }
+    }
 }
 
 module.exports = new DeviceController();

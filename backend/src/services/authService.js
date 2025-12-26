@@ -312,6 +312,111 @@ class AuthService {
             throw new Error('Şifre sıfırlama başarısız. Token geçersiz veya süresi dolmuş.');
         }
     }
+
+    /**
+     * Cihaz girişi (TV/Tablet için)
+     * @param {string} deviceCode - Cihaz kodu
+     * @returns {Object} - { token, device, expiresAt }
+     */
+    async deviceLogin(deviceCode) {
+        try {
+            const Device = require('../models/Device');
+
+            // Cihazı device_code ile bul
+            const device = await Device.findOne({ 
+                where: { device_code: deviceCode } 
+            });
+
+            if (!device) {
+                logger.warn(`Device login failed: Device not found - ${deviceCode}`);
+                throw new Error('Geçersiz cihaz kodu');
+            }
+
+            // Aktif mi kontrol et
+            if (device.status !== 'active') {
+                logger.warn(`Device login failed: Device inactive - ${deviceCode}`);
+                throw new Error('Cihaz aktif değil. Lütfen yöneticinize başvurun.');
+            }
+
+            // Device token oluştur
+            const token = this.generateDeviceToken(device);
+            const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 gün
+
+            // Son görülme zamanını güncelle
+            await device.update({ 
+                last_seen: new Date(),
+                status: 'active'
+            });
+
+            logger.info(`Device logged in successfully: ${device.device_code} (${device.device_name})`);
+
+            return {
+                token,
+                device: {
+                    id: device.id,
+                    device_code: device.device_code,
+                    device_name: device.device_name,
+                    store_id: device.store_id,
+                    status: device.status
+                },
+                expiresAt
+            };
+        } catch (error) {
+            logger.error('Device login error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Device Token oluştur
+     * @param {Object} device - Device objesi
+     * @returns {string} - JWT token
+     */
+    generateDeviceToken(device) {
+        const payload = {
+            deviceId: device.id,
+            deviceCode: device.device_code,
+            storeId: device.store_id,
+            type: 'device'
+        };
+
+        return jwt.sign(payload, jwtConfig.secret, {
+            expiresIn: '30d', // 30 gün
+            issuer: jwtConfig.issuer,
+            audience: jwtConfig.audience
+        });
+    }
+
+    /**
+     * Device Token doğrulama
+     * @param {string} token - JWT token
+     * @returns {Object} - Decoded token payload
+     */
+    async verifyDeviceToken(token) {
+        try {
+            const decoded = jwt.verify(token, jwtConfig.secret);
+
+            if (decoded.type !== 'device') {
+                throw new Error('Geçersiz token tipi');
+            }
+
+            const Device = require('../models/Device');
+            const device = await Device.findByPk(decoded.deviceId);
+
+            if (!device) {
+                throw new Error('Cihaz bulunamadı');
+            }
+
+            if (device.status !== 'active') {
+                throw new Error('Cihaz aktif değil');
+            }
+
+            return device;
+        } catch (error) {
+            logger.error('Device token verification error:', error);
+            throw new Error('Token geçersiz veya süresi dolmuş');
+        }
+    }
 }
 
 module.exports = new AuthService();

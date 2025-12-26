@@ -73,4 +73,18 @@ router.post('/forgot-password', validate(forgotPasswordSchema), authController.f
  */
 router.post('/reset-password', validate(resetPasswordSchema), authController.resetPassword);
 
+/**
+ * @route   POST /api/auth/device-login
+ * @desc    Cihaz girişi (TV/Tablet için)
+ * @access  Public
+ */
+router.post('/device-login', authController.deviceLogin);
+
+/**
+ * @route   GET /api/auth/verify
+ * @desc    Device token doğrulama
+ * @access  Device (requires device auth)
+ */
+router.get('/verify', authMiddleware, authController.verifyDevice);
+
 module.exports = router;
