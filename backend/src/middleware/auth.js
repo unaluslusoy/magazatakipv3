@@ -35,14 +35,14 @@ const authMiddleware = async(req, res, next) => {
         if (decoded.type === 'device') {
             const authService = require('../services/authService');
             const device = await authService.verifyDeviceToken(token);
-            
+
             req.device = device;
             req.isDevice = true;
             req.user = {
                 storeId: device.store_id,
                 role: 'device'
             };
-            
+
             return next();
         }
 

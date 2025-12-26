@@ -62,7 +62,7 @@ class ReportController {
                     FROM play_logs
                     WHERE DATE(created_at) = CURRENT_DATE
                 `, { type: sequelize.QueryTypes.SELECT });
-                todayPlays = playLogs[0] ? .count || 0;
+                todayPlays = (playLogs[0] && playLogs[0].count) || 0;
             } catch (err) {
                 logger.warn('Play logs table not found, setting todayPlays to 0');
             }

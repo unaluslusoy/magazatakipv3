@@ -178,14 +178,14 @@ class DeviceController {
             }
 
             // Update last_seen
-            await req.device.update({ 
+            await req.device.update({
                 last_seen: new Date(),
                 status: 'active'
             });
 
             logger.debug(`Heartbeat received from device: ${req.device.device_code}`);
 
-            return successResponse(res, { 
+            return successResponse(res, {
                 message: 'Heartbeat alındı',
                 server_time: new Date().toISOString()
             });
@@ -239,7 +239,7 @@ class DeviceController {
 
             // Log to server logger
             const logMessage = `[DEVICE:${req.device.device_code}] ${message}`;
-            
+
             if (level === 'error') {
                 logger.error(logMessage, data);
             } else if (level === 'warning') {
@@ -254,6 +254,53 @@ class DeviceController {
             return successResponse(res, { message: 'Log kaydedildi' });
         } catch (error) {
             logger.error('Device send log controller error:', error);
+            return errorResponse(res, error.message, 500);
+        }
+    }
+
+    /**
+     * PUT /api/devices/:id/playlist
+     * Cihaza playlist ata
+     */
+    async assignPlaylist(req, res) {
+        try {
+            const { id } = req.params;
+            const { playlist_id } = req.body;
+
+            const device = await deviceService.assignPlaylist(id, playlist_id);
+            return successResponse(res, device, 'Playlist başarıyla atandı');
+        } catch (error) {
+            logger.error('Assign playlist controller error:', error);
+            return errorResponse(res, error.message, error.message.includes('bulunamadı') ? 404 : 500);
+        }
+    }
+
+    /**
+     * POST /api/devices/:id/restart
+     * Cihazı yeniden başlat
+     */
+    async restartDevice(req, res) {
+        try {
+            const { id } = req.params;
+            // TODO: Send restart command via WebSocket
+            return successResponse(res, { message: 'Restart komutu gönderildi' });
+        } catch (error) {
+            logger.error('Restart device controller error:', error);
+            return errorResponse(res, error.message, 500);
+        }
+    }
+
+    /**
+     * POST /api/devices/:id/sync
+     * Cihazı senkronize et
+     */
+    async syncDevice(req, res) {
+        try {
+            const { id } = req.params;
+            // TODO: Send sync command via WebSocket
+            return successResponse(res, { message: 'Sync komutu gönderildi' });
+        } catch (error) {
+            logger.error('Sync device controller error:', error);
             return errorResponse(res, error.message, 500);
         }
     }

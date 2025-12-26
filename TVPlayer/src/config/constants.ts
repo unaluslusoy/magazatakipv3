@@ -1,7 +1,11 @@
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: process.env.API_URL || 'http://localhost:3000/api',
-  SOCKET_URL: process.env.SOCKET_URL || 'http://localhost:3000',
+  BASE_URL: __DEV__ 
+    ? 'http://192.168.0.127:3000/api' 
+    : 'https://mtapi.magazatakip.com.tr/api',
+  SOCKET_URL: __DEV__
+    ? 'http://192.168.0.127:3000'
+    : 'https://mtapi.magazatakip.com.tr',
   TIMEOUT: 30000,
 };
 

@@ -323,8 +323,8 @@ class AuthService {
             const Device = require('../models/Device');
 
             // Cihazı device_code ile bul
-            const device = await Device.findOne({ 
-                where: { device_code: deviceCode } 
+            const device = await Device.findOne({
+                where: { device_code: deviceCode }
             });
 
             if (!device) {
@@ -343,7 +343,7 @@ class AuthService {
             const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 gün
 
             // Son görülme zamanını güncelle
-            await device.update({ 
+            await device.update({
                 last_seen: new Date(),
                 status: 'active'
             });

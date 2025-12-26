@@ -16,6 +16,7 @@ class ApiService {
       timeout: API_CONFIG.TIMEOUT,
       headers: {
         'Content-Type': 'application/json',
+        'User-Agent': 'MagazaPanoTV/1.0 (Android; TV Player)',
       },
     });
 
