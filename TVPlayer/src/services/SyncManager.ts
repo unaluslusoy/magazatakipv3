@@ -15,7 +15,7 @@ class SyncManager {
   /**
    * Start auto sync
    */
-  startAutoSync(): void {
+  startAutoSync(runImmediately = true): void {
     if (this.syncInterval) {
       return;
     }
@@ -26,7 +26,9 @@ class SyncManager {
     }, SYNC_CONFIG.INTERVAL);
 
     // Initial sync
-    this.sync();
+    if (runImmediately) {
+      this.sync();
+    }
   }
 
   /**

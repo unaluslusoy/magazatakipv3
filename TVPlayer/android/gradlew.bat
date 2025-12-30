@@ -36,6 +36,11 @@ for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
 @rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
 set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
 
+@rem Force Gradle to use Android Studio bundled JDK (JBR) for consistent builds
+@rem (RN/AGP requires JDK 17+; system may have Java 8 on PATH)
+set "JAVA_HOME=C:\Program Files\Android\Android Studio\jbr"
+set "PATH=%JAVA_HOME%\bin;%PATH%"
+
 @rem Find java.exe
 if defined JAVA_HOME goto findJavaFromJavaHome
 

@@ -4,9 +4,9 @@ export interface Device {
   device_code: string;
   device_name: string;
   store_id: number;
-  status: 'active' | 'inactive' | 'offline';
+  status: 'online' | 'offline' | 'error' | 'maintenance';
   last_seen?: string;
-  created_at: string;
+  created_at?: string;
 }
 
 // Playlist Types
@@ -14,47 +14,51 @@ export interface Playlist {
   id: number;
   name: string;
   description?: string;
+  duration_seconds: number;
+  is_default: boolean;
+  priority: number;
   is_active: boolean;
-  contents: PlaylistContent[];
+  contents?: PlaylistContent[];
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export interface PlaylistContent {
   id: number;
-  content_id: number;
   playlist_id: number;
-  order: number;
-  duration: number;
+  content_id: number;
+  position: number;
+  duration_override?: number;
+  transition_type?: string;
   content: Content;
 }
 
 // Content Types
 export interface Content {
   id: number;
-  title: string;
-  type: 'image' | 'video' | 'template' | 'announcement';
-  file_url?: string;
-  local_path?: string;
-  duration: number;
-  file_size?: number;
+  name: string;
+  description?: string;
+  type: 'image' | 'video' | 'slider' | 'ticker' | 'announcement' | 'template';
+  file_url: string;
   thumbnail_url?: string;
-  data?: any;
+  duration_seconds: number;
+  status?: string;
   is_active: boolean;
-  created_at: string;
+  created_at?: string;
+  local_path?: string; // For downloaded files
 }
 
 // Schedule Types
 export interface Schedule {
   id: number;
   playlist_id: number;
-  device_id?: number;
-  store_id?: number;
+  schedule_type: 'daily' | 'weekly' | 'custom';
+  start_date?: string;
+  end_date?: string;
   start_time: string;
   end_time: string;
-  days_of_week: string[];
+  days_of_week?: string; // "1,2,3" etc.
   is_active: boolean;
-  priority: number;
   playlist?: Playlist;
 }
 

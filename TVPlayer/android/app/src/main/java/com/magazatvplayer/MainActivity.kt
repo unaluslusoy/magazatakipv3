@@ -1,11 +1,13 @@
 package com.magazatvplayer
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
+import android.content.res.Configuration
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
@@ -14,8 +16,8 @@ import com.facebook.react.defaults.DefaultReactActivityDelegate
 class MainActivity : ReactActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    
+    super.onCreate(null)
+
     // Tam ekran ayarları
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
       window.insetsController?.let {
@@ -36,6 +38,13 @@ class MainActivity : ReactActivity() {
     
     // Ekranı açık tut
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    val intent = Intent("onConfigurationChanged")
+    intent.putExtra("newConfig", newConfig)
+    this.sendBroadcast(intent)
   }
 
   /**

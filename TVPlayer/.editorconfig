@@ -1,0 +1,15 @@
+# Türkçe karakter uyumu için UTF-8 ve tutarlı satır sonu
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cmd,bat,ps1}]
+end_of_line = crlf
+
+[*.{yml,yaml,json,js,ts,tsx,kt,java,gradle,xml}]
+charset = utf-8
+

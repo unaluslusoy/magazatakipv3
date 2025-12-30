@@ -15,6 +15,7 @@ import ScheduleManager from '@services/ScheduleManager';
 import Logger from '@services/Logger';
 import type { Playlist, Content } from '@types/index';
 import { useNavigation } from '@react-navigation/native';
+import { APP_CONFIG } from '@config/constants';
 
 const PlayerScreen = () => {
   const navigation = useNavigation();
@@ -93,6 +94,26 @@ const PlayerScreen = () => {
     playNext();
   };
 
+  const handleVideoError = (error: any) => {
+    if (APP_CONFIG.ENABLE_DEBUG) {
+      console.error('Video error:', error);
+    }
+    Logger.error('Video playback error', error);
+    setTimeout(() => {
+      playNext();
+    }, 2000);
+  };
+
+  const handleImageError = (error: any) => {
+    if (APP_CONFIG.ENABLE_DEBUG) {
+      console.error('Image error:', error);
+    }
+    Logger.error('Image load error', error);
+    setTimeout(() => {
+      playNext();
+    }, 2000);
+  };
+
   // Auto-advance for images
   useEffect(() => {
     if (!currentContent || currentContent.type !== 'image') {
@@ -118,6 +139,12 @@ const PlayerScreen = () => {
 
   const handleSettings = () => {
     navigation.navigate('Settings' as never);
+  };
+
+  const getFileUri = (path: string | null | undefined) => {
+    if (!path) return '';
+    if (path.startsWith('http') || path.startsWith('file://')) return path;
+    return `file://${path}`;
   };
 
   if (loading) {
@@ -148,29 +175,30 @@ const PlayerScreen = () => {
         style={styles.touchArea}
         activeOpacity={1}
         onPress={toggleControls}>
-        {currentContent.type === 'video' ? (
-          <Video
-            source={{ uri: currentContent.local_path || currentContent.file_url }}
-            style={styles.video}
-            resizeMode="contain"
-            repeat={false}
-            paused={false}
-            onEnd={handleVideoEnd}
-            onError={error => console.error('Video error:', error)}
-          />
-        ) : currentContent.type === 'image' ? (
-          <View style={styles.imageContainer}>
-            <Image
-              source={{ uri: currentContent.local_path || currentContent.file_url }}
-              style={styles.image}
+        <View style={styles.stage}>
+          {currentContent.type === 'video' ? (
+            <Video
+              source={{ uri: getFileUri(currentContent.local_path || currentContent.file_url) }}
+              style={styles.media}
               resizeMode="contain"
+              repeat={false}
+              paused={false}
+              onEnd={handleVideoEnd}
+              onError={handleVideoError}
             />
-          </View>
-        ) : (
-          <View style={styles.templateContainer}>
-            <Text style={styles.templateText}>{currentContent.title}</Text>
-          </View>
-        )}
+          ) : currentContent.type === 'image' ? (
+            <Image
+              source={{ uri: getFileUri(currentContent.local_path || currentContent.file_url) }}
+              style={styles.media}
+              resizeMode="contain"
+              onError={handleImageError}
+            />
+          ) : (
+            <View style={[styles.media, styles.templateContainer]}>
+              <Text style={styles.templateText}>{currentContent.name}</Text>
+            </View>
+          )}
+        </View>
       </TouchableOpacity>
 
       {showControls && (
@@ -184,15 +212,15 @@ const PlayerScreen = () => {
 
           <View style={styles.bottomBar}>
             <TouchableOpacity style={styles.controlButton} onPress={handleSync}>
-              <Text style={styles.controlButtonText}>🔄 Sync</Text>
+              <Text style={styles.controlButtonText}>Senkronize</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.controlButton} onPress={playNext}>
-              <Text style={styles.controlButtonText}>⏭ Next</Text>
+              <Text style={styles.controlButtonText}>Sonraki</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.controlButton} onPress={handleSettings}>
-              <Text style={styles.controlButtonText}>⚙️ Settings</Text>
+              <Text style={styles.controlButtonText}>Ayarlar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -212,23 +240,19 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
   },
-  video: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  imageContainer: {
+  stage: {
     flex: 1,
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  image: {
+  media: {
     width: '100%',
     height: '100%',
+    aspectRatio: 9 / 16,
+    alignSelf: 'center',
   },
   templateContainer: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,

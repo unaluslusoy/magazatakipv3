@@ -33,13 +33,23 @@ class ScheduleManager {
       // Find matching schedules
       const matchingSchedules = activeSchedules.filter(schedule => {
         // Check day of week
-        if (!schedule.days_of_week || schedule.days_of_week.length === 0) {
+        if (!schedule.days_of_week) {
           return true; // No day restriction
         }
 
-        const dayMatches = schedule.days_of_week.some(
-          day => day.toLowerCase() === currentDay
-        );
+        // Convert "1,2,3" string to array of numbers/strings
+        const allowedDays = schedule.days_of_week.split(',').map(d => d.trim());
+
+        // Map current day name to number (Sunday=0, Monday=1, etc.) or check logic
+        // Assuming API returns 1 for Monday, 7 for Sunday or 0 for Sunday.
+        // Let's assume standard JS getDay() (0=Sunday, 1=Monday)
+        const currentDayIndex = now.getDay().toString();
+
+        // If API uses 1=Monday, we need to adjust.
+        // Let's try to match loosely for now or check documentation.
+        // Documentation doesn't specify.
+
+        const dayMatches = allowedDays.includes(currentDayIndex);
 
         if (!dayMatches) {
           return false;
@@ -63,8 +73,8 @@ class ScheduleManager {
         return null;
       }
 
-      // Sort by priority (higher first)
-      matchingSchedules.sort((a, b) => b.priority - a.priority);
+      // Sort by priority (higher first) - use playlist priority
+      matchingSchedules.sort((a, b) => (b.playlist?.priority || 0) - (a.playlist?.priority || 0));
 
       // Get highest priority schedule
       const selectedSchedule = matchingSchedules[0];

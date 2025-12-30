@@ -1,5 +1,4 @@
 import Orientation from 'react-native-orientation-locker';
-import SplashScreen from 'react-native-splash-screen';
 import StorageService from './StorageService';
 import DownloadManager from './DownloadManager';
 import SyncManager from './SyncManager';
@@ -13,15 +12,15 @@ export async function initializeApp(): Promise<void> {
   try {
     console.log('Initializing app...');
 
-    // Lock to landscape
-    Orientation.lockToLandscape();
+    // Lock to portrait
+    Orientation.lockToPortrait();
 
     // Initialize download manager
     await DownloadManager.initialize();
 
-    // Check if logged in
-    const isLoggedIn = await StorageService.isLoggedIn();
-    
+    // Check if logged in (local + server verify)
+    const isLoggedIn = await StorageService.isLoggedInVerified();
+
     if (isLoggedIn) {
       // Start sync
       SyncManager.startAutoSync();
@@ -33,9 +32,6 @@ export async function initializeApp(): Promise<void> {
     console.log('App initialized successfully');
   } catch (error) {
     console.error('Failed to initialize app:', error);
-  } finally {
-    // Hide splash screen
-    SplashScreen.hide();
   }
 }
 
