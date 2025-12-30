@@ -1,57 +1,79 @@
+param(
+  [Parameter(Mandatory = $true)]
+  [string]$RepoUrl,
+
+  [string]$Tag = "v1.0.1",
+
+  [string]$Message = "chore(release): v1.0.1",
+
+  [string]$GitExe = "C:\Program Files\Git\cmd\git.exe",
+
+  [string]$WorkDir = "C:\uygulamalar\MagazaPanel\TVPlayer"
+)
+
 $ErrorActionPreference = 'Stop'
-$git = "C:\Program Files\Git\cmd\git.exe"
-Set-Location "C:\uygulamalar\MagazaPanel\TVPlayer"
+Set-StrictMode -Version Latest
+
+Set-Location $WorkDir
+
+# Ensure git exists
+if (-not (Test-Path $GitExe)) {
+  throw "Git bulunamadı: $GitExe"
+}
 
 # Ensure repo
-& $git rev-parse --is-inside-work-tree | Out-Null
+& $GitExe rev-parse --is-inside-work-tree | Out-Null
+
+# Normalize repo url
+if ($RepoUrl.EndsWith('.git') -eq $false) {
+  $RepoUrl = "$RepoUrl.git"
+}
 
 # Configure remote
-$remoteUrl = "https://github.com/unaluslusoy/magazatakipv3.git"
 $hasOrigin = $false
 try {
-  $rem = & $git remote
-  if ($rem -match "origin") { $hasOrigin = $true }
-} catch {}
+  $rem = & $GitExe remote
+  if ($rem -match "(?m)^origin$") { $hasOrigin = $true }
+} catch {
+  # ignore
+}
 
 if ($hasOrigin) {
-  & $git remote set-url origin $remoteUrl
+  & $GitExe remote set-url origin $RepoUrl
 } else {
-  & $git remote add origin $remoteUrl
+  & $GitExe remote add origin $RepoUrl
 }
 
 # Stage and commit
-& $git add -A
-$hasChanges = $true
-try {
-  $status = & $git status --porcelain
-  if ([string]::IsNullOrWhiteSpace($status)) { $hasChanges = $false }
-} catch {}
+& $GitExe add -A
 
-if ($hasChanges) {
-  & $git commit -m "chore(release): v1.0.1"
+$status = & $GitExe status --porcelain
+if (-not [string]::IsNullOrWhiteSpace($status)) {
+  & $GitExe commit -m $Message
 }
 
 # Tag
-$tag = "v1.0.1"
 $tagExists = $false
 try {
-  $tags = & $git tag --list $tag
-  if ($tags -match $tag) { $tagExists = $true }
-} catch {}
+  $tags = & $GitExe tag --list $Tag
+  if ($tags -match [regex]::Escape($Tag)) { $tagExists = $true }
+} catch {
+  # ignore
+}
 
 if (-not $tagExists) {
-  & $git tag -a $tag -m "v1.0.1"
+  & $GitExe tag -a $Tag -m $Tag
 }
 
 # Push
-& $git push -u origin HEAD
-& $git push origin --tags
+& $GitExe push -u origin HEAD
+& $GitExe push origin --tags
 
-# Write summary
-$summary = @()
-$summary += "OK: pushed to $remoteUrl"
-$summary += "branch: $(& $git branch --show-current)"
-$summary += "head: $(& $git rev-parse --short HEAD)"
-$summary += "tag: $tag"
+# Write summary (UTF-8)
+$summary = @(
+  "OK: pushed to $RepoUrl",
+  ("branch: " + (& $GitExe branch --show-current)),
+  ("head: " + (& $GitExe rev-parse --short HEAD)),
+  "tag: $Tag"
+)
 $summary | Out-File -Encoding utf8 .\_git_push_result.txt
-

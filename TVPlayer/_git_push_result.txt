@@ -1,0 +1,4 @@
+﻿OK: pushed to https://github.com/unaluslusoy/magazatakipv3.git
+branch: main
+head: 34fb909
+tag: v1.0.1
