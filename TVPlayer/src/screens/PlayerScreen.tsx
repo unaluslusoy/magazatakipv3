@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,6 +7,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
+  Animated,
+  BackHandler,
+  TVEventHandler,
+  Platform,
+  useTVEventHandler,
 } from 'react-native';
 import Video from 'react-native-video';
 import StorageService from '@services/StorageService';
@@ -25,9 +30,129 @@ const PlayerScreen = () => {
   const [loading, setLoading] = useState(true);
   const [showControls, setShowControls] = useState(false);
 
+  // Fade animation
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  const fadeIn = () => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const fadeOut = (callback: () => void) => {
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      callback();
+      fadeIn();
+    });
+  };
+
+  // Önceki içeriğe geç
+  const playPrevious = useCallback(() => {
+    if (!currentPlaylist) return;
+
+    const contents = currentPlaylist.contents || [];
+    if (contents.length === 0) return;
+
+    fadeOut(() => {
+      const prevIndex = (currentIndex - 1 + contents.length) % contents.length;
+      const prevItem = contents[prevIndex];
+      const prevContent = prevItem.content || prevItem;
+
+      setCurrentIndex(prevIndex);
+      setCurrentContent(prevContent);
+
+      console.log('PlayerScreen: Önceki içerik:', prevContent?.title || prevContent?.name);
+    });
+  }, [currentPlaylist, currentIndex]);
+
+  // Android TV Remote / D-pad kontrolü
+  const handleTVEvent = useCallback((evt: any) => {
+    if (!evt) return;
+
+    const eventType = evt.eventType;
+    console.log('TV Event:', eventType);
+
+    switch (eventType) {
+      case 'right':
+      case 'swipeRight':
+        // Sağ tuş: Sonraki içerik
+        playNext();
+        break;
+      case 'left':
+      case 'swipeLeft':
+        // Sol tuş: Önceki içerik
+        playPrevious();
+        break;
+      case 'up':
+      case 'swipeUp':
+        // Yukarı tuş: Senkronize et
+        handleSync();
+        break;
+      case 'down':
+      case 'swipeDown':
+        // Aşağı tuş: Kontrolleri göster/gizle
+        setShowControls(prev => !prev);
+        break;
+      case 'select':
+      case 'playPause':
+        // OK/Select tuşu: Kontrolleri göster/gizle
+        setShowControls(prev => !prev);
+        break;
+      case 'menu':
+        // Menu tuşu: Ayarlar
+        handleSettings();
+        break;
+    }
+  }, [playNext, playPrevious]);
+
+  // TV Event Handler
+  useEffect(() => {
+    // Android TV için event handler
+    let tvEventHandler: any;
+
+    if (Platform.OS === 'android') {
+      try {
+        tvEventHandler = new TVEventHandler();
+        tvEventHandler.enable(null, (cmp: any, evt: any) => {
+          handleTVEvent(evt);
+        });
+      } catch (e) {
+        // TVEventHandler desteklenmiyor, devam et
+        console.log('TVEventHandler not available');
+      }
+    }
+
+    return () => {
+      if (tvEventHandler) {
+        tvEventHandler.disable();
+      }
+    };
+  }, [handleTVEvent]);
+
+  // Back button handler
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (showControls) {
+        setShowControls(false);
+        return true; // Back tuşunu yakala
+      }
+      // Kontroller kapalıysa, kontrolleri göster (çıkış onayı için)
+      setShowControls(true);
+      return true;
+    });
+
+    return () => backHandler.remove();
+  }, [showControls]);
+
   useEffect(() => {
     loadPlaylist();
-    
+
     // Check schedule every minute
     const scheduleInterval = setInterval(() => {
       checkScheduleChange();
@@ -39,25 +164,47 @@ const PlayerScreen = () => {
   const loadPlaylist = async () => {
     try {
       setLoading(true);
+      console.log('PlayerScreen: Playlist yükleniyor...');
 
       // Get current playlist from schedule manager
       const playlist = await ScheduleManager.getCurrentPlaylist();
+      console.log('PlayerScreen: Playlist alındı:', playlist?.name, 'Contents:', playlist?.contents?.length);
 
-      if (!playlist || playlist.contents.length === 0) {
-        Logger.warning('No playlist or contents available');
+      if (!playlist) {
+        console.log('PlayerScreen: Playlist bulunamadı');
+        Logger.warning('No playlist available');
         return;
       }
 
+      // Contents formatını normalize et
+      const contents = playlist.contents || [];
+      console.log('PlayerScreen: Contents array:', contents.length);
+
+      if (contents.length === 0) {
+        console.log('PlayerScreen: İçerik yok');
+        Logger.warning('No contents in playlist');
+        return;
+      }
+
+      // İlk içeriği al - format: { content: {...} } veya doğrudan content objesi
+      const firstItem = contents[0];
+      const firstContent = firstItem.content || firstItem;
+
+      // Debug: Tüm içerik yapısını logla
+      console.log('PlayerScreen: İlk item raw:', JSON.stringify(firstItem, null, 2));
+      console.log('PlayerScreen: İlk içerik:', firstContent?.name || firstContent?.title, 'Tip:', firstContent?.type, 'URL:', firstContent?.file_url || firstContent?.url);
+
       setCurrentPlaylist(playlist);
-      setCurrentContent(playlist.contents[0].content);
+      setCurrentContent(firstContent);
       setCurrentIndex(0);
-      
-      Logger.info('Playlist loaded', { 
-        playlistId: playlist.id, 
+
+      Logger.info('Playlist loaded', {
+        playlistId: playlist.id,
         playlistName: playlist.name,
-        contentsCount: playlist.contents.length 
+        contentsCount: contents.length
       });
     } catch (error) {
+      console.error('PlayerScreen: Playlist yükleme hatası:', error);
       Logger.error('Failed to load playlist', error);
     } finally {
       setLoading(false);
@@ -67,28 +214,41 @@ const PlayerScreen = () => {
   const checkScheduleChange = async () => {
     const newPlaylist = await ScheduleManager.getCurrentPlaylist();
     if (newPlaylist && newPlaylist.id !== currentPlaylist?.id) {
-      Logger.info('Schedule changed, loading new playlist', { 
-        oldPlaylist: currentPlaylist?.name,
-        newPlaylist: newPlaylist.name 
-      });
-      setCurrentPlaylist(newPlaylist);
-      setCurrentContent(newPlaylist.contents[0].content);
-      setCurrentIndex(0);
+      const contents = newPlaylist.contents || [];
+      if (contents.length > 0) {
+        const firstItem = contents[0];
+        const firstContent = firstItem.content || firstItem;
+
+        Logger.info('Schedule changed, loading new playlist', {
+          oldPlaylist: currentPlaylist?.name,
+          newPlaylist: newPlaylist.name
+        });
+        setCurrentPlaylist(newPlaylist);
+        setCurrentContent(firstContent);
+        setCurrentIndex(0);
+      }
     }
   };
 
-  const playNext = () => {
+  const playNext = useCallback(() => {
     if (!currentPlaylist) return;
 
-    const nextIndex = (currentIndex + 1) % currentPlaylist.contents.length;
-    setCurrentIndex(nextIndex);
-    setCurrentContent(currentPlaylist.contents[nextIndex].content);
-    
-    Logger.info('Playing next content', { 
-      index: nextIndex,
-      contentId: currentPlaylist.contents[nextIndex].content.id 
+    const contents = currentPlaylist.contents || [];
+    if (contents.length === 0) return;
+
+    // Fade out, içerik değiştir, fade in
+    fadeOut(() => {
+      const nextIndex = (currentIndex + 1) % contents.length;
+      const nextItem = contents[nextIndex];
+      const nextContent = nextItem.content || nextItem;
+
+      setCurrentIndex(nextIndex);
+      setCurrentContent(nextContent);
+
+      console.log('PlayerScreen: Sonraki içerik:', nextContent?.title || nextContent?.name);
     });
-  };
+  }, [currentPlaylist, currentIndex]);
+
 
   const handleVideoEnd = () => {
     playNext();
@@ -114,37 +274,54 @@ const PlayerScreen = () => {
     }, 2000);
   };
 
-  // Auto-advance for images
+  // Auto-advance for images, ticker, and other non-video content
   useEffect(() => {
-    if (!currentContent || currentContent.type !== 'image') {
+    if (!currentContent) return;
+
+    // Video kendi kendine ilerler (onEnd callback ile)
+    if (currentContent.type === 'video') {
       return;
     }
 
-    const duration = currentContent.duration * 1000 || 10000; // Default 10 seconds
+    const duration = getContentDuration(currentContent);
+    console.log('PlayerScreen: Auto-advance timer başlatıldı:', duration, 'ms, Tip:', currentContent.type);
+
     const timer = setTimeout(() => {
+      console.log('PlayerScreen: Timer doldu, sonraki içeriğe geçiliyor');
       playNext();
     }, duration);
 
     return () => clearTimeout(timer);
-  }, [currentContent]);
+  }, [currentContent, currentIndex]);
 
-  const toggleControls = () => {
-    setShowControls(!showControls);
-  };
+  const toggleControls = useCallback(() => {
+    setShowControls(prev => !prev);
+  }, []);
 
-  const handleSync = async () => {
+  const handleSync = useCallback(async () => {
+    console.log('PlayerScreen: Senkronizasyon başlatılıyor...');
     await SyncManager.sync();
     await loadPlaylist();
-  };
+  }, []);
 
-  const handleSettings = () => {
+  const handleSettings = useCallback(() => {
     navigation.navigate('Settings' as never);
-  };
+  }, [navigation]);
 
-  const getFileUri = (path: string | null | undefined) => {
+  const getFileUri = (content: Content | null) => {
+    if (!content) return '';
+    // Önce local_path, sonra file_url, sonra url
+    const path = content.local_path || content.file_url || content.url;
     if (!path) return '';
     if (path.startsWith('http') || path.startsWith('file://')) return path;
     return `file://${path}`;
+  };
+
+  const getContentDuration = (content: Content | null): number => {
+    if (!content) return 10000;
+    // API'den duration veya duration_seconds gelebilir
+    const seconds = content.duration || content.duration_seconds || 10;
+    return seconds * 1000;
   };
 
   if (loading) {
@@ -175,10 +352,10 @@ const PlayerScreen = () => {
         style={styles.touchArea}
         activeOpacity={1}
         onPress={toggleControls}>
-        <View style={styles.stage}>
+        <Animated.View style={[styles.stage, { opacity: fadeAnim }]}>
           {currentContent.type === 'video' ? (
             <Video
-              source={{ uri: getFileUri(currentContent.local_path || currentContent.file_url) }}
+              source={{ uri: getFileUri(currentContent) }}
               style={styles.media}
               resizeMode="contain"
               repeat={false}
@@ -188,17 +365,25 @@ const PlayerScreen = () => {
             />
           ) : currentContent.type === 'image' ? (
             <Image
-              source={{ uri: getFileUri(currentContent.local_path || currentContent.file_url) }}
+              source={{ uri: getFileUri(currentContent) }}
               style={styles.media}
               resizeMode="contain"
               onError={handleImageError}
             />
+          ) : currentContent.type === 'ticker' ? (
+            <View style={[styles.media, styles.tickerContainer]}>
+              <Text style={styles.tickerText}>
+                {currentContent.title || currentContent.name || currentContent.description || 'Kayan Yazı'}
+              </Text>
+            </View>
           ) : (
             <View style={[styles.media, styles.templateContainer]}>
-              <Text style={styles.templateText}>{currentContent.name}</Text>
+              <Text style={styles.templateText}>
+                {currentContent.title || currentContent.name || currentContent.description || 'İçerik'}
+              </Text>
             </View>
           )}
-        </View>
+        </Animated.View>
       </TouchableOpacity>
 
       {showControls && (
@@ -206,21 +391,42 @@ const PlayerScreen = () => {
           <View style={styles.topBar}>
             <Text style={styles.playlistName}>{currentPlaylist?.name}</Text>
             <Text style={styles.contentInfo}>
-              {currentIndex + 1} / {currentPlaylist?.contents.length}
+              {currentIndex + 1} / {(currentPlaylist?.contents || []).length}
             </Text>
           </View>
 
+          {/* TV Remote talimatları */}
+          <View style={styles.tvHints}>
+            <Text style={styles.tvHintText}>◀ Önceki  |  ▶ Sonraki  |  ▲ Senkronize  |  ▼ Gizle  |  MENU Ayarlar</Text>
+          </View>
+
           <View style={styles.bottomBar}>
-            <TouchableOpacity style={styles.controlButton} onPress={handleSync}>
-              <Text style={styles.controlButtonText}>Senkronize</Text>
+            <TouchableOpacity
+              style={styles.controlButton}
+              onPress={playPrevious}
+              activeOpacity={0.7}>
+              <Text style={styles.controlButtonText}>◀ Önceki</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.controlButton} onPress={playNext}>
-              <Text style={styles.controlButtonText}>Sonraki</Text>
+            <TouchableOpacity
+              style={styles.controlButton}
+              onPress={handleSync}
+              activeOpacity={0.7}>
+              <Text style={styles.controlButtonText}>↻ Senkronize</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.controlButton} onPress={handleSettings}>
-              <Text style={styles.controlButtonText}>Ayarlar</Text>
+            <TouchableOpacity
+              style={styles.controlButton}
+              onPress={playNext}
+              activeOpacity={0.7}>
+              <Text style={styles.controlButtonText}>Sonraki ▶</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.controlButton, styles.settingsButton]}
+              onPress={handleSettings}
+              activeOpacity={0.7}>
+              <Text style={styles.controlButtonText}>⚙ Ayarlar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -249,18 +455,33 @@ const styles = StyleSheet.create({
   media: {
     width: '100%',
     height: '100%',
-    aspectRatio: 9 / 16,
-    alignSelf: 'center',
+    // Dikey modda tam ekran kullanılıyor
   },
   templateContainer: {
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
+    backgroundColor: '#1a1a2e',
   },
   templateText: {
-    fontSize: 48,
+    fontSize: 56,
     color: '#fff',
     textAlign: 'center',
+    fontWeight: 'bold',
+    lineHeight: 72,
+  },
+  tickerContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 60,
+    backgroundColor: '#1a1a2e',
+  },
+  tickerText: {
+    fontSize: 48,
+    color: '#00ff88',
+    textAlign: 'center',
+    fontWeight: 'bold',
+    lineHeight: 64,
   },
   loadingText: {
     color: '#fff',
@@ -307,22 +528,45 @@ const styles = StyleSheet.create({
   },
   bottomBar: {
     position: 'absolute',
-    bottom: 30,
-    left: 30,
-    right: 30,
+    bottom: 40,
+    left: 40,
+    right: 40,
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+    gap: 20,
   },
   controlButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 12,
-    padding: 20,
-    paddingHorizontal: 40,
+    backgroundColor: 'rgba(0, 122, 255, 0.8)',
+    borderRadius: 16,
+    padding: 24,
+    paddingHorizontal: 36,
+    minWidth: 160,
+    alignItems: 'center',
+  },
+  settingsButton: {
+    backgroundColor: 'rgba(255, 149, 0, 0.8)',
   },
   controlButtonText: {
     color: '#fff',
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  tvHints: {
+    position: 'absolute',
+    top: '45%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  tvHintText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 18,
+    textAlign: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
   },
 });
 

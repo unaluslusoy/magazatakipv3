@@ -18,8 +18,8 @@ export async function initializeApp(): Promise<void> {
     // Initialize download manager
     await DownloadManager.initialize();
 
-    // Check if logged in (local + server verify)
-    const isLoggedIn = await StorageService.isLoggedInVerified();
+    // Check if logged in (local only)
+    const isLoggedIn = await StorageService.isLoggedIn();
 
     if (isLoggedIn) {
       // Start sync

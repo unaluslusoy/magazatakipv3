@@ -39,7 +39,7 @@ const App = () => {
           // ignore
         }
 
-        const isLoggedIn = await StorageService.isLoggedInVerified();
+        const isLoggedIn = await StorageService.isLoggedIn();
         const route = isLoggedIn ? 'Player' : 'Login';
         console.log('[BOOT] initialRoute=', route);
         setInitialRoute(route);

@@ -5,6 +5,11 @@ export interface Device {
   device_name: string;
   store_id: number;
   status: 'online' | 'offline' | 'error' | 'maintenance';
+  current_playlist_id?: number;
+  orientation?: 'landscape' | 'portrait';
+  resolution?: string;
+  layout_type?: 'single' | 'split' | 'grid';
+  store_name?: string;
   last_seen?: string;
   created_at?: string;
 }
@@ -37,13 +42,18 @@ export interface PlaylistContent {
 export interface Content {
   id: number;
   name: string;
+  title?: string; // API'den gelebilir
   description?: string;
   type: 'image' | 'video' | 'slider' | 'ticker' | 'announcement' | 'template';
-  file_url: string;
+  file_url?: string;
+  url?: string; // API'den bu şekilde de gelebilir
   thumbnail_url?: string;
-  duration_seconds: number;
+  thumbnail?: string; // API'den bu şekilde de gelebilir
+  duration_seconds?: number;
+  duration?: number; // API'den bu şekilde de gelebilir
+  order?: number;
   status?: string;
-  is_active: boolean;
+  is_active?: boolean;
   created_at?: string;
   local_path?: string; // For downloaded files
 }
@@ -51,13 +61,16 @@ export interface Content {
 // Schedule Types
 export interface Schedule {
   id: number;
+  device_id?: number;
   playlist_id: number;
-  schedule_type: 'daily' | 'weekly' | 'custom';
+  playlist_name?: string;
+  schedule_type?: 'daily' | 'weekly' | 'custom';
   start_date?: string;
   end_date?: string;
   start_time: string;
   end_time: string;
-  days_of_week?: string; // "1,2,3" etc.
+  days_of_week?: number[]; // [1, 2, 3, 4, 5] - 1=Pazartesi, 7=Pazar
+  priority?: number;
   is_active: boolean;
   playlist?: Playlist;
 }

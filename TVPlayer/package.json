@@ -1,7 +1,7 @@
 {
     "name": "magaza-tv-player",
-    "version": "1.0.1",
-    "description": "Mağaza Panel TV/Tablet Dijital Ekran Oynatıcı",
+    "version": "1.1.0",
+    "description": "Mağaza Pano - Android TV/Tablet reklam panosu uygulaması",
     "main": "index.js",
     "scripts": {
         "android": "react-native run-android",

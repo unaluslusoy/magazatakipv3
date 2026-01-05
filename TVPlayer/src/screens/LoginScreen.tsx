@@ -26,14 +26,29 @@ const LoginScreen = () => {
   useEffect(() => {
     const bootstrap = async () => {
       try {
-        // Eğer token hâlâ geçerliyse login ekranını hiç göstermeden Player'a git.
-        const ok = await StorageService.isLoggedInVerified();
-        if (ok) {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Player' as never }],
-          });
+        // Önce local token kontrolü
+        const isLocallyLoggedIn = await StorageService.isLoggedIn();
+        if (!isLocallyLoggedIn) {
+          const saved = await StorageService.getDeviceCode();
+          if (saved) {
+            setDeviceCode(saved);
+          }
           return;
+        }
+
+        // Token var, sunucudan doğrula
+        try {
+          const device = await ApiService.verifyToken();
+          if (device) {
+            await StorageService.saveDeviceInfo(device);
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Player' as never }],
+            });
+            return;
+          }
+        } catch {
+          // Token geçersiz, login ekranında kal
         }
 
         const saved = await StorageService.getDeviceCode();
@@ -85,6 +100,10 @@ const LoginScreen = () => {
 
     try {
       const authToken = await ApiService.login({ device_code: deviceCode.trim() });
+
+      if (!authToken || !authToken.device) {
+        throw new Error('Sunucudan geçersiz yanıt alındı (Cihaz bilgisi eksik).');
+      }
 
       await StorageService.saveAuthToken(authToken);
       await StorageService.saveDeviceInfo(authToken.device);

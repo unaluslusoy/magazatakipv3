@@ -65,30 +65,73 @@ class SyncManager {
         return this.getDefaultSyncStatus();
       }
 
-      // Send heartbeat
-      await ApiService.sendHeartbeat();
+      // Get device info
+      const deviceInfo = await StorageService.getDeviceInfo();
+      const deviceId = deviceInfo?.id;
+      console.log('Device ID:', deviceId);
 
-      // Fetch playlists
-      const playlists = await ApiService.getPlaylists();
+      // Send heartbeat (hata olsa bile devam et)
+      try {
+        await ApiService.sendHeartbeat();
+      } catch (hbError: any) {
+        console.log('Heartbeat gönderilemedi (kritik değil):', hbError?.message || hbError);
+      }
+
+      let playlists: any[] = [];
+      let contents: any[] = [];
+
+      // Cihaza atanmış playlist'i al
+      if (deviceId) {
+        try {
+          const devicePlaylist = await ApiService.getDevicePlaylist(deviceId);
+          if (devicePlaylist) {
+            playlists = [devicePlaylist];
+            // Playlist içeriklerini al
+            if (devicePlaylist.contents && devicePlaylist.contents.length > 0) {
+              contents = devicePlaylist.contents.map((pc: any) => pc.content || pc);
+            }
+            console.log(`Cihaz playlist'i alındı: ${devicePlaylist.name}, ${contents.length} içerik`);
+          }
+        } catch (error) {
+          console.log('Cihaz playlist alınamadı, genel playlist listesi çekiliyor...');
+        }
+      }
+
+      // Eğer cihaza özel playlist yoksa genel listeyi çek
+      if (playlists.length === 0) {
+        playlists = await ApiService.getPlaylists();
+        contents = await ApiService.getContents();
+      }
+
       await StorageService.savePlaylists(playlists);
-
-      // Fetch contents
-      const contents = await ApiService.getContents();
       await StorageService.saveContents(contents);
 
-      // Fetch schedules
-      const schedules = await ApiService.getActiveSchedules();
-      await StorageService.saveSchedules(schedules);
+      // Fetch schedules (cihaz bazlı) - hata olsa bile devam et
+      let schedules: any[] = [];
+      try {
+        schedules = await ApiService.getActiveSchedules(deviceId);
+        await StorageService.saveSchedules(schedules);
+      } catch (scheduleError: any) {
+        console.log('Schedule alınamadı (kritik değil):', scheduleError?.message || scheduleError);
+      }
 
       // Download new content files
-      const pendingDownloads = contents.filter(c => c.file_url && !c.local_path);
+      const pendingDownloads = contents.filter((c: any) => (c.file_url || c.url) && !c.local_path);
       if (pendingDownloads.length > 0) {
         console.log(`Downloading ${pendingDownloads.length} files...`);
-        await DownloadManager.downloadPlaylistContents(pendingDownloads);
+        try {
+          await DownloadManager.downloadPlaylistContents(pendingDownloads);
+        } catch (downloadError: any) {
+          console.log('Download hatası (kritik değil):', downloadError?.message || downloadError);
+        }
       }
 
       // Process offline queue
-      await this.processOfflineQueue();
+      try {
+        await this.processOfflineQueue();
+      } catch (queueError) {
+        // Kritik değil
+      }
 
       // Save sync status
       const syncStatus: SyncStatus = {
@@ -108,7 +151,7 @@ class SyncManager {
       return syncStatus;
     } catch (error: any) {
       console.error('Sync failed:', error);
-      
+
       // Return last known status
       const status = await StorageService.getSyncStatus();
       return status || this.getDefaultSyncStatus();

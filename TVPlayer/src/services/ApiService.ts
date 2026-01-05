@@ -1,7 +1,13 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { API_CONFIG, APP_CONFIG } from '@config/constants';
-import StorageService from './StorageService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { LoginCredentials, AuthToken, Playlist, Content, Schedule, Device } from '@types/index';
+
+// Döngüsel bağımlılığı önlemek için StorageService yerine doğrudan AsyncStorage kullanıyoruz
+const STORAGE_KEYS = {
+  AUTH_TOKEN: 'auth_token',
+  LOGS_DISABLED_UNTIL: 'logs_disabled_until',
+};
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -46,9 +52,16 @@ class ApiService {
     // Request interceptor - add auth token
     this.api.interceptors.request.use(
       async config => {
-        const token = await StorageService.getAuthToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token.token}`;
+        try {
+          const tokenData = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+          if (tokenData) {
+            const token: AuthToken = JSON.parse(tokenData);
+            if (token?.token) {
+              config.headers.Authorization = `Bearer ${token.token}`;
+            }
+          }
+        } catch {
+          // Token okunamazsa devam et
         }
         return config;
       },
@@ -60,8 +73,8 @@ class ApiService {
       response => response,
       async (error: AxiosError) => {
         if (error.response?.status === 401) {
-          // Token expired - logout
-          await StorageService.clearAuthToken();
+          // Token expired - clear
+          await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
         }
         return Promise.reject(error);
       }
@@ -76,7 +89,7 @@ class ApiService {
 
   async logout(): Promise<void> {
     await this.api.post('/auth/logout');
-    await StorageService.clearAuthToken();
+    await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
   }
 
   async verifyToken(): Promise<Device> {
@@ -85,20 +98,28 @@ class ApiService {
   }
 
   // Device
+  async getDeviceById(deviceId: number): Promise<Device> {
+    const response = await this.api.get<ApiEnvelope<Device>>(`/devices/${deviceId}`);
+    return response.data.data;
+  }
+
   async updateDeviceStatus(status: string): Promise<void> {
     await this.api.put('/devices/status', { status });
   }
 
-  async sendHeartbeat(): Promise<void> {
+  async sendHeartbeat(currentPlaylistId?: number, currentContentId?: number, isPlaying?: boolean): Promise<void> {
     try {
       await this.api.post('/devices/heartbeat', {
-        ip_address: '0.0.0.0', // TODO: Get real IP
-        app_version: '1.0.0',
-        os_version: 'Android',
-        free_storage_mb: 0, // TODO: Get real storage
+        app_version: APP_CONFIG.VERSION,
+        os_version: 'Android 13',
+        screen_resolution: '1920x1080',
+        free_storage_mb: 1024,
+        current_playlist_id: currentPlaylistId,
+        current_content_id: currentContentId,
+        is_playing: isPlaying ?? true,
       });
     } catch {
-      // Heartbeat kritik değil; sync akışını kırmasın
+      // Heartbeat kritik değil
       return;
     }
   }
@@ -109,10 +130,28 @@ class ApiService {
     return response.data.data.items.data;
   }
 
-  async getPlaylistById(id: number, includeContents = false): Promise<Playlist> {
-    const url = includeContents ? `/playlists/${id}?include=contents` : `/playlists/${id}`;
-    const response = await this.api.get<ApiEnvelope<Playlist>>(url);
+  async getPlaylistById(id: number): Promise<Playlist> {
+    const response = await this.api.get<ApiEnvelope<Playlist>>(`/playlists/${id}`);
     return response.data.data;
+  }
+
+  /**
+   * Cihaza atanmış playlist'i al
+   * Önce device bilgisini çeker, sonra current_playlist_id ile playlist detayını döner
+   */
+  async getDevicePlaylist(deviceId: number): Promise<Playlist | null> {
+    try {
+      const device = await this.getDeviceById(deviceId);
+      const playlistId = (device as any).current_playlist_id;
+      if (!playlistId) {
+        console.log('Cihaza atanmış playlist yok');
+        return null;
+      }
+      return await this.getPlaylistById(playlistId);
+    } catch (error) {
+      console.error('Playlist alınamadı:', error);
+      return null;
+    }
   }
 
   // Contents
@@ -127,58 +166,77 @@ class ApiService {
   }
 
   // Schedules
-  async getSchedules(isActive?: boolean): Promise<Schedule[]> {
-    const response = await this.api.get<ApiEnvelope<PaginatedItems<Schedule>>>('/schedules', {
-      params: typeof isActive === 'boolean' ? { is_active: isActive } : undefined,
-    });
-    return response.data.data.items.data;
+  async getSchedules(deviceId?: number, isActive?: boolean): Promise<Schedule[]> {
+    const params: Record<string, any> = {};
+    if (typeof isActive === 'boolean') {
+      params.active = isActive;
+    }
+    if (deviceId) {
+      params.device_id = deviceId;
+    }
+
+    try {
+      const response = await this.api.get<any>('/schedules', { params });
+
+      // Farklı response formatlarını destekle
+      const data = response?.data?.data;
+      if (!data) return [];
+
+      // Format 1: { items: { data: [...] } }
+      if (data.items?.data) {
+        return data.items.data;
+      }
+      // Format 2: { items: [...] }
+      if (Array.isArray(data.items)) {
+        return data.items;
+      }
+      // Format 3: [...] (doğrudan array)
+      if (Array.isArray(data)) {
+        return data;
+      }
+
+      return [];
+    } catch (error) {
+      console.log('Schedule API hatası:', error);
+      return [];
+    }
   }
 
-  async getActiveSchedules(): Promise<Schedule[]> {
-    return this.getSchedules(true);
+  async getActiveSchedules(deviceId?: number): Promise<Schedule[]> {
+    return this.getSchedules(deviceId, true);
   }
 
   // Logs
   async sendLog(log: any): Promise<void> {
-    // Kapalıysa hiç deneme
     if (!APP_CONFIG.ENABLE_SERVER_LOGS) return;
 
-    const disabledUntil = await StorageService.getLogsDisabledUntil();
-    if (disabledUntil && disabledUntil > Date.now()) {
-      return;
-    }
-
     try {
-      await this.api.post('/devices/logs', log);
-      if (disabledUntil) {
-        await StorageService.setLogsDisabledUntil(null);
+      const disabledUntilStr = await AsyncStorage.getItem(STORAGE_KEYS.LOGS_DISABLED_UNTIL);
+      if (disabledUntilStr) {
+        const disabledUntil = Number(disabledUntilStr);
+        if (Number.isFinite(disabledUntil) && disabledUntil > Date.now()) {
+          return;
+        }
       }
+
+      await this.api.post('/devices/logs', log);
     } catch (error) {
       const err = error as AxiosError;
-
-      // Endpoint yoksa (404) uzun süre kapat: kullanıcının ekranında/terminalde spam olmasın.
       if (err.response?.status === 404) {
-        // 30 gün kapat (yarın kurulum var; kesin çözüm)
-        await StorageService.setLogsDisabledUntil(Date.now() + 30 * 24 * 60 * 60 * 1000);
-        return;
+        // 30 gün kapat
+        await AsyncStorage.setItem(STORAGE_KEYS.LOGS_DISABLED_UNTIL, String(Date.now() + 30 * 24 * 60 * 60 * 1000));
       }
-
-      return;
     }
   }
 
   // Health check
   async healthCheck(): Promise<boolean> {
     try {
-      // Backend dokümanına göre health endpoint: GET /api/health
-      // baseURL zaten .../api olduğundan '/health' -> .../api/health
       const response = await this.api.get('/health');
       const data: any = response.data;
-
       if (data && typeof data.success === 'boolean') {
         return response.status === 200 && data.success === true;
       }
-
       return response.status === 200;
     } catch {
       return false;

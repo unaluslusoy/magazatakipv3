@@ -41,12 +41,17 @@ class SocketService {
     });
 
     this.socket.on('disconnect', reason => {
-      console.log('Socket disconnected:', reason);
+      if (this.reconnectAttempts < 3) {
+        console.log('Socket bağlantısı kesildi');
+      }
     });
 
     this.socket.on('connect_error', error => {
-      console.error('Socket connection error:', error);
       this.reconnectAttempts++;
+      // Sadece ilk hatada log göster
+      if (this.reconnectAttempts === 1) {
+        console.log('Socket bağlantısı kurulamıyor, offline modda çalışılıyor');
+      }
     });
 
     // Listen for sync commands

@@ -1,8 +1,11 @@
 package com.magazatvplayer
 
+import android.app.KeyguardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -14,6 +17,8 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnable
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 class MainActivity : ReactActivity() {
+
+  private var wakeLock: PowerManager.WakeLock? = null
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(null)
@@ -35,9 +40,35 @@ class MainActivity : ReactActivity() {
         or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
       )
     }
-    
-    // Ekranı açık tut
-    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+    // Ekranı açık tut - FLAG ayarları
+    window.addFlags(
+      WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+      WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+      WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+      WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+    )
+
+    // Kilit ekranını devre dışı bırak (API 27+)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+      setShowWhenLocked(true)
+      setTurnScreenOn(true)
+      val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+      keyguardManager.requestDismissKeyguard(this, null)
+    }
+
+    // WakeLock ile uyku modunu engelle
+    val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+    wakeLock = powerManager.newWakeLock(
+      PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+      "MagazaPano::WakeLock"
+    )
+    wakeLock?.acquire()
+  }
+
+  override fun onDestroy() {
+    super.onDestroy()
+    wakeLock?.release()
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {

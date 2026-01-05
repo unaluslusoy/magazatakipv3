@@ -1,10 +1,27 @@
-# OSX
-.DS_Store
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build
+bin/
+obj/
+
+# Rider
+.idea/
 
 # Node
 node_modules/
-npm-debug.log
-yarn-error.log
+
+# Env
+.env
+.env.local
+
+# Logs
+*.log
+
+# OSX
+.DS_Store
 
 # React Native
 .expo/
@@ -23,11 +40,6 @@ ios/build/
 *.pbxuser
 *.xcworkspace/
 
-# Env
-.env
-.env.local
-.env.production
-
 # IDE
 .idea/
 .vscode/
@@ -42,3 +54,6 @@ coverage/
 # Media cache
 media_cache/
 downloads/
+
+# Local secrets
+github_token.txt
