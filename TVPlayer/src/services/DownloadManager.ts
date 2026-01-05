@@ -3,6 +3,15 @@ import { CACHE_CONFIG } from '@config/constants';
 import StorageService from './StorageService';
 import type { Content, DownloadProgress } from '@types/index';
 
+// İndirme durumu callback tipi
+type DownloadCallback = (info: {
+  totalFiles: number;
+  completedFiles: number;
+  currentFile: string;
+  overallProgress: number;
+  isDownloading: boolean;
+}) => void;
+
 /**
  * Download Manager
  * Media file downloads and caching
@@ -12,8 +21,49 @@ class DownloadManager {
   private activeDownloads: number = 0;
   private maxConcurrentDownloads = 3;
 
+  // İndirme durumu callback'leri
+  private progressCallbacks: Set<DownloadCallback> = new Set();
+  private totalFilesToDownload = 0;
+  private completedDownloads = 0;
+  private currentFileName = '';
+
   private get cachePath(): string {
     return `${RNFS.DocumentDirectoryPath}/${CACHE_CONFIG.DOWNLOAD_PATH}`;
+  }
+
+  /**
+   * İndirme durumu dinleyicisi ekle
+   */
+  addProgressListener(callback: DownloadCallback): void {
+    this.progressCallbacks.add(callback);
+  }
+
+  /**
+   * İndirme durumu dinleyicisini kaldır
+   */
+  removeProgressListener(callback: DownloadCallback): void {
+    this.progressCallbacks.delete(callback);
+  }
+
+  /**
+   * Tüm dinleyicilere durum bildir
+   */
+  private notifyProgress(): void {
+    const overallProgress = this.totalFilesToDownload > 0
+      ? (this.completedDownloads / this.totalFilesToDownload) * 100
+      : 0;
+
+    const info = {
+      totalFiles: this.totalFilesToDownload,
+      completedFiles: this.completedDownloads,
+      currentFile: this.currentFileName,
+      overallProgress,
+      isDownloading: this.activeDownloads > 0 || this.completedDownloads < this.totalFilesToDownload,
+    };
+
+    this.progressCallbacks.forEach(cb => {
+      try { cb(info); } catch (e) { /* ignore */ }
+    });
   }
 
   async initialize(): Promise<void> {
@@ -21,30 +71,85 @@ class DownloadManager {
     const exists = await RNFS.exists(this.cachePath);
     if (!exists) {
       await RNFS.mkdir(this.cachePath);
+      console.log('Önbellek dizini oluşturuldu:', this.cachePath);
     }
 
-    // Clean old cache
+    // Önbellekteki dosyaları kontrol et ve Storage'ı güncelle
+    await this.syncCacheWithStorage();
+
+    // Clean old cache (30 günden eski dosyaları sil)
     await this.cleanCache();
+  }
+
+  /**
+   * Önbellekteki dosyaları Storage ile senkronize et
+   */
+  async syncCacheWithStorage(): Promise<void> {
+    try {
+      const cacheFiles = await RNFS.readDir(this.cachePath);
+      const storedContents = await StorageService.getContents();
+
+      console.log(`Önbellekte ${cacheFiles.length} dosya bulundu`);
+
+      let updatedCount = 0;
+
+      for (const content of storedContents) {
+        // Dosya adını oluştur
+        const fileName = this.getFileName(content);
+        const localPath = `${this.cachePath}/${fileName}`;
+
+        // Önbellekte var mı kontrol et
+        const fileExists = cacheFiles.some(f => f.path === localPath || f.name === fileName);
+
+        if (fileExists && !content.local_path) {
+          // Storage'ı güncelle
+          await StorageService.updateContentLocalPath(content.id, localPath);
+          updatedCount++;
+        }
+      }
+
+      if (updatedCount > 0) {
+        console.log(`${updatedCount} içerik önbellekten güncellendi`);
+      }
+    } catch (error) {
+      console.log('Önbellek senkronizasyonu hatası:', error);
+    }
   }
 
   /**
    * Download content file
    */
   async downloadContent(content: Content): Promise<string> {
-    if (!content.file_url) {
+    const fileUrl = content.file_url || content.url;
+    if (!fileUrl) {
       throw new Error('Content has no file URL');
-    }
-
-    // Check if already downloaded
-    if (content.local_path) {
-      const exists = await RNFS.exists(content.local_path);
-      if (exists) {
-        return content.local_path;
-      }
     }
 
     const fileName = this.getFileName(content);
     const localPath = `${this.cachePath}/${fileName}`;
+
+    // Önce önbellekte var mı kontrol et
+    try {
+      const cacheExists = await RNFS.exists(localPath);
+      if (cacheExists) {
+        console.log('Önbellekten yükleniyor:', fileName);
+        // Storage'ı güncelle
+        await StorageService.updateContentLocalPath(content.id, localPath);
+        return localPath;
+      }
+    } catch (e) {
+      // Önbellek kontrolü başarısız, indirmeye devam et
+    }
+
+    // Check if already downloaded (local_path varsa)
+    if (content.local_path) {
+      const exists = await RNFS.exists(content.local_path);
+      if (exists) {
+        console.log('Zaten indirilmiş:', content.local_path);
+        return content.local_path;
+      }
+    }
+
 
     // Check queue
     if (this.downloadQueue.has(content.id)) {
@@ -78,13 +183,17 @@ class DownloadManager {
     const progress = this.downloadQueue.get(content.id)!;
     progress.status = 'downloading';
 
+    const fileName = content.title || content.name || `Dosya ${content.id}`;
+
     try {
       await RNFS.downloadFile({
         fromUrl: content.file_url!,
         toFile: localPath,
         progressDivider: 10,
         begin: () => {
-          console.log('Download started:', content.title);
+          console.log('İndirme başladı:', fileName);
+          this.currentFileName = fileName;
+          this.notifyProgress();
         },
         progress: res => {
           const percent = (res.bytesWritten / res.contentLength) * 100;
@@ -142,13 +251,44 @@ class DownloadManager {
    * Download all playlist contents
    */
   async downloadPlaylistContents(contents: Content[]): Promise<void> {
-    const downloads = contents
-      .filter(c => c.file_url && !c.local_path)
-      .map(c => this.downloadContent(c).catch(err => {
-        console.error(`Failed to download ${c.title}:`, err);
-      }));
+    const toDownload = contents.filter(c => (c.file_url || c.url) && !c.local_path);
+
+    if (toDownload.length === 0) {
+      console.log('Tüm içerikler zaten indirilmiş');
+      return;
+    }
+
+    // İndirme durumunu başlat
+    this.totalFilesToDownload = toDownload.length;
+    this.completedDownloads = 0;
+    this.notifyProgress();
+
+    console.log(`${toDownload.length} dosya indiriliyor...`);
+
+    const downloads = toDownload.map(async (c) => {
+      try {
+        // file_url veya url kullan
+        const contentWithUrl = { ...c, file_url: c.file_url || c.url };
+        this.currentFileName = c.title || c.name || `Dosya ${c.id}`;
+        this.notifyProgress();
+
+        await this.downloadContent(contentWithUrl);
+
+        this.completedDownloads++;
+        this.notifyProgress();
+      } catch (err) {
+        console.error(`İndirme hatası (${c.title || c.name}):`, err);
+        this.completedDownloads++;
+        this.notifyProgress();
+      }
+    });
 
     await Promise.all(downloads);
+
+    // İndirme tamamlandı
+    this.currentFileName = '';
+    this.notifyProgress();
+    console.log('Tüm indirmeler tamamlandı');
   }
 
   /**
@@ -213,8 +353,47 @@ class DownloadManager {
   }
 
   private getFileName(content: Content): string {
-    const ext = content.file_url?.split('.').pop() || 'mp4';
-    return `${content.id}_${Date.now()}.${ext}`;
+    const url = content.file_url || content.url || '';
+
+    // URL'den dosya uzantısını çıkar
+    let ext = 'bin'; // varsayılan
+
+    try {
+      // URL'den path kısmını al
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+
+      // Son segment'i al
+      const segments = pathname.split('/').filter(s => s);
+      const lastSegment = segments[segments.length - 1] || '';
+
+      // Uzantı var mı kontrol et (. içermeli ve 2-5 karakter olmalı)
+      if (lastSegment.includes('.')) {
+        const possibleExt = lastSegment.split('.').pop()?.toLowerCase() || '';
+        if (possibleExt.length >= 2 && possibleExt.length <= 5 && /^[a-z0-9]+$/.test(possibleExt)) {
+          ext = possibleExt;
+        }
+      }
+    } catch (e) {
+      // URL parse hatası, content type'a göre uzantı belirle
+    }
+
+    // Content type'a göre varsayılan uzantı
+    if (ext === 'bin') {
+      switch (content.type) {
+        case 'image':
+          ext = 'jpg';
+          break;
+        case 'video':
+          ext = 'mp4';
+          break;
+        default:
+          ext = 'bin';
+      }
+    }
+
+    // Tutarlı dosya adı (content.id ile)
+    return `content_${content.id}.${ext}`;
   }
 }
 

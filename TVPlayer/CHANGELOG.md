@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.2.0 (2026-01-05)
+
+### 🎯 Yeni Özellikler
+- **İndirme İlerleme Çubuğu**: İçerikler indirilirken görsel ilerleme göstergesi
+- **Önbellek Desteği**: İndirilen içerikler cihazda saklanıyor, tekrar indirilmiyor
+- **Offline Oynatma**: İndirilen içerikler internet olmadan da oynatılabiliyor
+- **Menü Kapat Butonu**: Sağ üstte "✕ Kapat" butonu eklendi
+- **Android 9+ Desteği**: minSdkVersion 28'e düşürüldü (Android Pie ve üstü)
+
+### 🔧 İyileştirmeler
+- Menü arka planına dokunarak kapatılabiliyor
+- Back tuşu ile menü kapatılabiliyor
+- Dosya adı oluşturma hatası düzeltildi (URL parse sorunu)
+- Release APK imzalama düzeltildi
+- TV remote talimatları güncellendi
+
+### 🐛 Hata Düzeltmeleri
+- `ENOENT: no such file or directory` hatası düzeltildi
+- Önbellek senkronizasyonu eklendi
+- Content type'a göre doğru dosya uzantısı belirleniyor
+
+### 📦 Build
+- Release keystore oluşturuldu
+- APK Signature Scheme v3 ile imzalanıyor
+- minifyEnabled kapatıldı (stabilite için)
+
+---
+
 ## v1.1.0 (2026-01-05)
 
 ### 🎯 Yeni Özellikler

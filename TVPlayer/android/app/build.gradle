@@ -70,8 +70,8 @@ android {
         applicationId "com.magazatvplayer"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "1.1.0"
+        versionCode 4
+        versionName "1.2.0"
     }
     signingConfigs {
         debug {
@@ -81,19 +81,11 @@ android {
             keyPassword 'android'
         }
 
-        // Release signing (keystore bilgileri gradle.properties veya environment üzerinden okunur)
         release {
-            def ksPath = project.findProperty('RELEASE_STORE_FILE') ?: System.getenv('RELEASE_STORE_FILE')
-            def ksPass = project.findProperty('RELEASE_STORE_PASSWORD') ?: System.getenv('RELEASE_STORE_PASSWORD')
-            def keyAlias = project.findProperty('RELEASE_KEY_ALIAS') ?: System.getenv('RELEASE_KEY_ALIAS')
-            def keyPass = project.findProperty('RELEASE_KEY_PASSWORD') ?: System.getenv('RELEASE_KEY_PASSWORD')
-
-            if (ksPath && ksPass && keyAlias && keyPass) {
-                storeFile file(ksPath)
-                storePassword ksPass
-                this.keyAlias = keyAlias
-                keyPassword keyPass
-            }
+            storeFile file('release.keystore')
+            storePassword 'magazapano123'
+            keyAlias 'magazapano'
+            keyPassword 'magazapano123'
         }
     }
     buildTypes {
@@ -101,9 +93,9 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Keystore tanımlı değilse build kırılmasın diye debug imzaya düş
-            signingConfig (signingConfigs.release.storeFile != null ? signingConfigs.release : signingConfigs.debug)
-            minifyEnabled true
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }

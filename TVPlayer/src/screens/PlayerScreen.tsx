@@ -17,10 +17,20 @@ import Video from 'react-native-video';
 import StorageService from '@services/StorageService';
 import SyncManager from '@services/SyncManager';
 import ScheduleManager from '@services/ScheduleManager';
+import DownloadManager from '@services/DownloadManager';
 import Logger from '@services/Logger';
 import type { Playlist, Content } from '@types/index';
 import { useNavigation } from '@react-navigation/native';
 import { APP_CONFIG } from '@config/constants';
+
+// İndirme durumu tipi
+interface DownloadStatus {
+  isDownloading: boolean;
+  totalFiles: number;
+  completedFiles: number;
+  currentFile: string;
+  overallProgress: number;
+}
 
 const PlayerScreen = () => {
   const navigation = useNavigation();
@@ -29,6 +39,15 @@ const PlayerScreen = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showControls, setShowControls] = useState(false);
+
+  // İndirme durumu
+  const [downloadStatus, setDownloadStatus] = useState<DownloadStatus>({
+    isDownloading: false,
+    totalFiles: 0,
+    completedFiles: 0,
+    currentFile: '',
+    overallProgress: 0,
+  });
 
   // Fade animation
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -96,20 +115,23 @@ const PlayerScreen = () => {
         break;
       case 'down':
       case 'swipeDown':
-        // Aşağı tuş: Kontrolleri göster/gizle
-        setShowControls(prev => !prev);
-        break;
       case 'select':
       case 'playPause':
-        // OK/Select tuşu: Kontrolleri göster/gizle
+        // Aşağı/OK tuşu: Kontrolleri göster/gizle
         setShowControls(prev => !prev);
         break;
       case 'menu':
         // Menu tuşu: Ayarlar
         handleSettings();
         break;
+      case 'back':
+        // Back tuşu: Menüyü gizle
+        if (showControls) {
+          setShowControls(false);
+        }
+        break;
     }
-  }, [playNext, playPrevious]);
+  }, [playNext, playPrevious, handleSync, handleSettings, showControls]);
 
   // TV Event Handler
   useEffect(() => {
@@ -150,6 +172,27 @@ const PlayerScreen = () => {
     return () => backHandler.remove();
   }, [showControls]);
 
+  // DownloadManager listener
+  useEffect(() => {
+    const handleDownloadProgress = (info: DownloadStatus) => {
+      setDownloadStatus(info);
+
+      // İndirme tamamlandığında playlist'i yeniden yükle
+      if (!info.isDownloading && info.totalFiles > 0 && info.completedFiles === info.totalFiles) {
+        console.log('PlayerScreen: İndirmeler tamamlandı, playlist yeniden yükleniyor...');
+        setTimeout(() => {
+          loadPlaylist();
+        }, 500);
+      }
+    };
+
+    DownloadManager.addProgressListener(handleDownloadProgress);
+
+    return () => {
+      DownloadManager.removeProgressListener(handleDownloadProgress);
+    };
+  }, []);
+
   useEffect(() => {
     loadPlaylist();
 
@@ -186,15 +229,31 @@ const PlayerScreen = () => {
         return;
       }
 
+      // Storage'dan güncel içerikleri al (local_path güncellenmiş olabilir)
+      const storedContents = await StorageService.getContents();
+
+      // Contents'ı local_path ile güncelle
+      const updatedContents = contents.map((item: any) => {
+        const content = item.content || item;
+        const stored = storedContents.find((c: any) => c.id === content.id || c.id === content.content_id);
+        if (stored?.local_path) {
+          return { ...item, content: { ...content, local_path: stored.local_path } };
+        }
+        return item;
+      });
+
       // İlk içeriği al - format: { content: {...} } veya doğrudan content objesi
-      const firstItem = contents[0];
+      const firstItem = updatedContents[0];
       const firstContent = firstItem.content || firstItem;
 
       // Debug: Tüm içerik yapısını logla
       console.log('PlayerScreen: İlk item raw:', JSON.stringify(firstItem, null, 2));
-      console.log('PlayerScreen: İlk içerik:', firstContent?.name || firstContent?.title, 'Tip:', firstContent?.type, 'URL:', firstContent?.file_url || firstContent?.url);
+      console.log('PlayerScreen: İlk içerik:', firstContent?.name || firstContent?.title, 'Tip:', firstContent?.type, 'Local:', firstContent?.local_path);
 
-      setCurrentPlaylist(playlist);
+      // Playlist'i güncellenmiş contents ile kaydet
+      const updatedPlaylist = { ...playlist, contents: updatedContents };
+
+      setCurrentPlaylist(updatedPlaylist);
       setCurrentContent(firstContent);
       setCurrentIndex(0);
 
@@ -310,11 +369,20 @@ const PlayerScreen = () => {
 
   const getFileUri = (content: Content | null) => {
     if (!content) return '';
-    // Önce local_path, sonra file_url, sonra url
-    const path = content.local_path || content.file_url || content.url;
+
+    // Önce local_path kontrol et (önbellekteki dosya)
+    if (content.local_path) {
+      // file:// prefix ekle
+      const localPath = content.local_path.startsWith('file://')
+        ? content.local_path
+        : `file://${content.local_path}`;
+      return localPath;
+    }
+
+    // Yoksa URL kullan (online)
+    const path = content.file_url || content.url;
     if (!path) return '';
-    if (path.startsWith('http') || path.startsWith('file://')) return path;
-    return `file://${path}`;
+    return path;
   };
 
   const getContentDuration = (content: Content | null): number => {
@@ -323,6 +391,45 @@ const PlayerScreen = () => {
     const seconds = content.duration || content.duration_seconds || 10;
     return seconds * 1000;
   };
+
+  // İndirme devam ediyorsa ilerleme çubuğu göster
+  if (downloadStatus.isDownloading && downloadStatus.totalFiles > 0) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.downloadContainer}>
+          <Text style={styles.downloadTitle}>📥 İçerikler İndiriliyor</Text>
+
+          <Text style={styles.downloadInfo}>
+            {downloadStatus.completedFiles} / {downloadStatus.totalFiles} dosya
+          </Text>
+
+          {downloadStatus.currentFile ? (
+            <Text style={styles.downloadFileName} numberOfLines={1}>
+              {downloadStatus.currentFile}
+            </Text>
+          ) : null}
+
+          {/* İlerleme çubuğu */}
+          <View style={styles.progressBarContainer}>
+            <View
+              style={[
+                styles.progressBar,
+                { width: `${downloadStatus.overallProgress}%` }
+              ]}
+            />
+          </View>
+
+          <Text style={styles.downloadPercent}>
+            %{Math.round(downloadStatus.overallProgress)}
+          </Text>
+
+          <Text style={styles.downloadHint}>
+            Lütfen bekleyin, indirme tamamlandığında içerikler otomatik başlayacak...
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   if (loading) {
     return (
@@ -387,9 +494,21 @@ const PlayerScreen = () => {
       </TouchableOpacity>
 
       {showControls && (
-        <View style={styles.controls}>
+        <TouchableOpacity
+          style={styles.controls}
+          activeOpacity={1}
+          onPress={() => setShowControls(false)}>
           <View style={styles.topBar}>
             <Text style={styles.playlistName}>{currentPlaylist?.name}</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowControls(false)}>
+              <Text style={styles.closeButtonText}>✕ Kapat</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* İçerik bilgisi */}
+          <View style={styles.contentInfoContainer}>
             <Text style={styles.contentInfo}>
               {currentIndex + 1} / {(currentPlaylist?.contents || []).length}
             </Text>
@@ -397,7 +516,7 @@ const PlayerScreen = () => {
 
           {/* TV Remote talimatları */}
           <View style={styles.tvHints}>
-            <Text style={styles.tvHintText}>◀ Önceki  |  ▶ Sonraki  |  ▲ Senkronize  |  ▼ Gizle  |  MENU Ayarlar</Text>
+            <Text style={styles.tvHintText}>◀ Önceki  |  ▶ Sonraki  |  ▲ Senkronize  |  BACK/▼ Gizle</Text>
           </View>
 
           <View style={styles.bottomBar}>
@@ -429,7 +548,7 @@ const PlayerScreen = () => {
               <Text style={styles.controlButtonText}>⚙ Ayarlar</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -488,6 +607,57 @@ const styles = StyleSheet.create({
     fontSize: 24,
     marginTop: 20,
   },
+  // İndirme durumu stilleri
+  downloadContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    width: '80%',
+    maxWidth: 500,
+  },
+  downloadTitle: {
+    fontSize: 36,
+    color: '#fff',
+    fontWeight: 'bold',
+    marginBottom: 30,
+  },
+  downloadInfo: {
+    fontSize: 28,
+    color: '#00ff88',
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  downloadFileName: {
+    fontSize: 20,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  progressBarContainer: {
+    width: '100%',
+    height: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginVertical: 20,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#00ff88',
+    borderRadius: 10,
+  },
+  downloadPercent: {
+    fontSize: 48,
+    color: '#fff',
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  downloadHint: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.5)',
+    textAlign: 'center',
+    marginTop: 20,
+  },
   errorText: {
     color: '#fff',
     fontSize: 32,
@@ -516,11 +686,28 @@ const styles = StyleSheet.create({
     padding: 30,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
   playlistName: {
     color: '#fff',
     fontSize: 28,
     fontWeight: 'bold',
+    flex: 1,
+  },
+  closeButton: {
+    backgroundColor: 'rgba(255, 59, 48, 0.8)',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  contentInfoContainer: {
+    alignItems: 'center',
+    marginTop: 10,
   },
   contentInfo: {
     color: '#fff',
