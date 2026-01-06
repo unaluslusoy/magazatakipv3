@@ -1,9 +1,25 @@
 <resources>
-    <!-- Base application theme. -->
+    <!-- Base application theme - Kiosk/Digital Signage için optimize edildi -->
     <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
-        <!-- Customize your theme here. -->
-        <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+        <!-- Tam ekran modu -->
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowContentOverlay">@null</item>
+
+        <!-- Status bar ve navigation bar gizle -->
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+
+        <!-- Arka plan siyah - dijital tabela için ideal -->
+        <item name="android:windowBackground">@android:color/black</item>
+
+        <!-- React Native edit text uyumluluğu -->
+        <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+
+        <!-- Android 8.1+ (API 27+) Notch/Cutout desteği -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+
+        <!-- Status bar transparan -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>

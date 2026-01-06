@@ -1,5 +1,39 @@
 # Changelog
 
+## v1.0.6 (2026-01-06)
+
+### 🎯 Kiosk Modu İyileştirmeleri (Android 9+)
+
+#### MainActivity.kt
+- **FLAG_KEEP_SCREEN_ON**: Ekran asla kapanmaz - dijital tabela için zorunlu
+- **onResume()**: Başka uygulamadan dönüldüğünde sistem UI'ı otomatik gizlenir
+- **onWindowFocusChanged()**: Focus değişimlerinde UI yeniden gizlenir
+- **Android 11+ WindowInsetsController**: Yeni API ile tam ekran modu
+- **Android 9-10 IMMERSIVE_STICKY**: Eski API ile sticky immersive mod
+- **setDecorFitsSystemWindows(false)**: Android 11+ layout padding sorunu çözüldü
+- **setOnSystemUiVisibilityChangeListener**: Özel ROM'lar için UI değişiklik dinleyicisi
+
+#### Manifest
+- **launchMode: singleTask**: Çoklu instance engellendi
+- **configChanges genişletildi**: Rotation/config değişiminde reload yok
+- **resizeableActivity: false**: Split screen engellendi
+
+#### Theme (styles.xml)
+- **windowFullscreen: true**: Baştan tam ekran
+- **windowLayoutInDisplayCutoutMode: shortEdges**: Notch desteği
+- **Transparan status/navigation bar**: Boşluk kalmaz
+
+#### Kiosk Güvenlik
+- **onBackPressed() engellendi**: Yanlışlıkla çıkış yok
+- **7 kez hızlı tıklama**: Admin çıkış mekanizması
+- **Toast bildirimler**: 3+ tıklamada kalan sayı gösterilir
+
+### 🔧 Build Ayarları
+- **targetSdkVersion: 34**: Google Play Store uyumlu
+- **minSdkVersion: 28**: Android 9 (Pie) ve üstü
+
+---
+
 ## v1.0.5 (2026-01-06)
 
 ### 🎯 Yeni Özellikler

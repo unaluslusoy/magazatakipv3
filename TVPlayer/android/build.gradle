@@ -3,7 +3,7 @@ buildscript {
         buildToolsVersion = "35.0.0"
         minSdkVersion = 28  // Android 9 (Pie) ve üstü
         compileSdkVersion = 35
-        targetSdkVersion = 35
+        targetSdkVersion = 34  // Google Play Store uyumluluğu için
         ndkVersion = "25.1.8937393"
         kotlinVersion = "1.9.22"
     }
