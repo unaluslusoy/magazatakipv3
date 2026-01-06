@@ -22,6 +22,118 @@ import Logger from '@services/Logger';
 import type { Playlist, Content } from '@types/index';
 import { useNavigation } from '@react-navigation/native';
 import { APP_CONFIG } from '@config/constants';
+import { Dimensions, PixelRatio } from 'react-native';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Ekran boyutuna göre ölçekleme
+const baseWidth = 1080; // Referans genişlik (dikey mod için)
+const baseHeight = 1920; // Referans yükseklik
+
+// Genişliğe göre ölçekle
+const scaleWidth = (size: number) => (SCREEN_WIDTH / baseWidth) * size;
+// Yüksekliğe göre ölçekle
+const scaleHeight = (size: number) => (SCREEN_HEIGHT / baseHeight) * size;
+// Font ölçekleme (daha küçük ekranlarda çok küçülmesin)
+const scaleFont = (size: number) => {
+  const scale = SCREEN_WIDTH / baseWidth;
+  const newSize = size * scale;
+  return Math.round(PixelRatio.roundToNearestPixel(newSize));
+};
+// Moderate ölçekleme (hem genişlik hem yükseklik ortalaması)
+const moderateScale = (size: number, factor = 0.5) => {
+  return size + (scaleWidth(size) - size) * factor;
+};
+
+// HTML etiketlerini temizle
+const stripHtml = (html: string): string => {
+  if (!html) return '';
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&ouml;/g, 'ö')
+    .replace(/&uuml;/g, 'ü')
+    .replace(/&ccedil;/g, 'ç')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+// Kayan yazı bileşeni - tam genişlikte yumuşak kaydırma
+const TickerText = ({ text, style }: { text: string; style?: any }) => {
+  const scrollAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const cleanText = stripHtml(text || ''); // Handle null/undefined
+  const [textWidth, setTextWidth] = useState(SCREEN_WIDTH * 2);
+
+  // Yazı uzunluğuna göre animasyon süresi - yavaş ve okunaklı
+  // Karakter başına ~250ms, minimum 15 saniye
+  const duration = Math.max(15000, cleanText.length * 250);
+
+  useEffect(() => {
+    if (!cleanText) return;
+
+    // Animasyonu başlat
+    const startAnimation = () => {
+      scrollAnim.setValue(SCREEN_WIDTH);
+      Animated.timing(scrollAnim, {
+        toValue: -(textWidth + 100), // Yazının tamamı ekrandan çıksın
+        duration: duration,
+        useNativeDriver: true,
+        isInteraction: false,
+      }).start(({ finished }) => {
+        if (finished) {
+          // Döngü - başa dön
+          startAnimation();
+        }
+      });
+    };
+
+    // İlk başlatma
+    const timer = setTimeout(startAnimation, 500);
+
+    return () => {
+      clearTimeout(timer);
+      scrollAnim.stopAnimation();
+    };
+  }, [cleanText, duration, textWidth]);
+
+  if (!cleanText) return null;
+
+  return (
+    <Animated.Text
+      style={[
+        {
+          fontSize: scaleFont(48), // Okunabilir font boyutu
+          color: '#ffffff',
+          fontWeight: 'bold',
+          position: 'absolute',
+          left: 0,
+          transform: [{ translateX: scrollAnim }],
+          textShadowColor: 'rgba(0, 0, 0, 0.9)',
+          textShadowOffset: { width: 3, height: 3 },
+          textShadowRadius: 8,
+          includeFontPadding: false,
+          textAlignVertical: 'center',
+          letterSpacing: 1,
+        },
+        style,
+      ]}
+      onLayout={(e) => {
+        const width = e.nativeEvent.layout.width;
+        if (width > 0) {
+          setTextWidth(width);
+        }
+      }}
+      numberOfLines={1}
+      ellipsizeMode="clip">
+      {cleanText}
+    </Animated.Text>
+  );
+};
 
 // İndirme durumu tipi
 interface DownloadStatus {
@@ -248,7 +360,7 @@ const PlayerScreen = () => {
 
       // Debug: Tüm içerik yapısını logla
       console.log('PlayerScreen: İlk item raw:', JSON.stringify(firstItem, null, 2));
-      console.log('PlayerScreen: İlk içerik:', firstContent?.name || firstContent?.title, 'Tip:', firstContent?.type, 'Local:', firstContent?.local_path);
+      console.log('PlayerScreen: İlk içerik:', firstContent?.name || firstContent?.title, 'Tip:', firstContent?.type, 'ticker_text:', firstContent?.ticker_text);
 
       // Playlist'i güncellenmiş contents ile kaydet
       const updatedPlaylist = { ...playlist, contents: updatedContents };
@@ -479,9 +591,16 @@ const PlayerScreen = () => {
             />
           ) : currentContent.type === 'ticker' ? (
             <View style={[styles.media, styles.tickerContainer]}>
-              <Text style={styles.tickerText}>
-                {currentContent.title || currentContent.name || currentContent.description || 'Kayan Yazı'}
+              {/* Başlık - Sabit ortada */}
+              <Text style={styles.tickerTitle}>
+                {currentContent.name || currentContent.title || 'Duyuru'}
               </Text>
+              {/* Kayan Yazı - ticker_text alanından */}
+              <View style={styles.tickerTextContainer}>
+                <TickerText
+                  text={currentContent.ticker_text || currentContent.description || currentContent.text || 'Hoş geldiniz!'}
+                />
+              </View>
             </View>
           ) : (
             <View style={[styles.media, styles.templateContainer]}>
@@ -574,104 +693,132 @@ const styles = StyleSheet.create({
   media: {
     width: '100%',
     height: '100%',
-    // Dikey modda tam ekran kullanılıyor
   },
   templateContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    padding: scaleWidth(40),
     backgroundColor: '#1a1a2e',
   },
   templateText: {
-    fontSize: 56,
+    fontSize: scaleFont(56),
     color: '#fff',
     textAlign: 'center',
     fontWeight: 'bold',
-    lineHeight: 72,
+    lineHeight: scaleFont(72),
   },
   tickerContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 60,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#0d1b2a', // Koyu mavi arka plan
   },
-  tickerText: {
-    fontSize: 48,
-    color: '#00ff88',
+  tickerTitle: {
+    fontSize: scaleFont(56),
+    color: '#00d9ff', // Cyan renk
     textAlign: 'center',
     fontWeight: 'bold',
-    lineHeight: 64,
+    marginBottom: scaleHeight(60),
+    paddingHorizontal: scaleWidth(30),
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 6,
+    width: '100%',
+    letterSpacing: 2,
+  },
+  tickerDescription: {
+    fontSize: scaleFont(36),
+    color: '#ffffff',
+    textAlign: 'center',
+    lineHeight: scaleFont(50),
+    paddingHorizontal: scaleWidth(20),
+  },
+  tickerText: {
+    fontSize: scaleFont(48),
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  tickerTextContainer: {
+    width: '100%',
+    height: scaleHeight(150),
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingVertical: scaleHeight(20),
+    position: 'relative',
   },
   loadingText: {
     color: '#fff',
-    fontSize: 24,
-    marginTop: 20,
+    fontSize: scaleFont(24),
+    marginTop: scaleHeight(20),
   },
   // İndirme durumu stilleri
   downloadContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
-    width: '80%',
-    maxWidth: 500,
+    padding: scaleWidth(40),
+    width: '85%',
   },
   downloadTitle: {
-    fontSize: 36,
+    fontSize: scaleFont(36),
     color: '#fff',
     fontWeight: 'bold',
-    marginBottom: 30,
+    marginBottom: scaleHeight(30),
   },
   downloadInfo: {
-    fontSize: 28,
+    fontSize: scaleFont(28),
     color: '#00ff88',
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: scaleHeight(10),
   },
   downloadFileName: {
-    fontSize: 20,
+    fontSize: scaleFont(18),
     color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 20,
+    marginBottom: scaleHeight(20),
     textAlign: 'center',
   },
   progressBarContainer: {
     width: '100%',
-    height: 20,
+    height: scaleHeight(20),
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 10,
+    borderRadius: scaleWidth(10),
     overflow: 'hidden',
-    marginVertical: 20,
+    marginVertical: scaleHeight(20),
   },
   progressBar: {
     height: '100%',
     backgroundColor: '#00ff88',
-    borderRadius: 10,
+    borderRadius: scaleWidth(10),
   },
   downloadPercent: {
-    fontSize: 48,
+    fontSize: scaleFont(48),
     color: '#fff',
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: scaleHeight(20),
   },
   downloadHint: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     color: 'rgba(255, 255, 255, 0.5)',
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: scaleHeight(20),
   },
   errorText: {
     color: '#fff',
-    fontSize: 32,
-    marginBottom: 30,
+    fontSize: scaleFont(32),
+    marginBottom: scaleHeight(30),
   },
   button: {
     backgroundColor: '#007AFF',
-    borderRadius: 12,
-    padding: 20,
-    paddingHorizontal: 40,
+    borderRadius: scaleWidth(12),
+    padding: scaleWidth(20),
+    paddingHorizontal: scaleWidth(40),
   },
   buttonText: {
     color: '#fff',
-    fontSize: 24,
+    fontSize: scaleFont(24),
     fontWeight: 'bold',
   },
   controls: {
@@ -683,51 +830,52 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   topBar: {
-    padding: 30,
+    padding: scaleWidth(30),
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   playlistName: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: scaleFont(28),
     fontWeight: 'bold',
     flex: 1,
   },
   closeButton: {
     backgroundColor: 'rgba(255, 59, 48, 0.8)',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
+    paddingVertical: scaleHeight(12),
+    paddingHorizontal: scaleWidth(24),
+    borderRadius: scaleWidth(8),
   },
   closeButtonText: {
     color: '#fff',
-    fontSize: 20,
+    fontSize: scaleFont(20),
     fontWeight: 'bold',
   },
   contentInfoContainer: {
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: scaleHeight(10),
   },
   contentInfo: {
     color: '#fff',
-    fontSize: 24,
+    fontSize: scaleFont(24),
   },
   bottomBar: {
     position: 'absolute',
-    bottom: 40,
-    left: 40,
-    right: 40,
+    bottom: scaleHeight(40),
+    left: scaleWidth(20),
+    right: scaleWidth(20),
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 20,
+    flexWrap: 'wrap',
+    gap: scaleWidth(15),
   },
   controlButton: {
     backgroundColor: 'rgba(0, 122, 255, 0.8)',
-    borderRadius: 16,
-    padding: 24,
-    paddingHorizontal: 36,
-    minWidth: 160,
+    borderRadius: scaleWidth(12),
+    padding: scaleWidth(18),
+    paddingHorizontal: scaleWidth(28),
+    minWidth: scaleWidth(140),
     alignItems: 'center',
   },
   settingsButton: {
@@ -735,7 +883,7 @@ const styles = StyleSheet.create({
   },
   controlButtonText: {
     color: '#fff',
-    fontSize: 22,
+    fontSize: scaleFont(20),
     fontWeight: 'bold',
     textAlign: 'center',
   },
@@ -748,12 +896,12 @@ const styles = StyleSheet.create({
   },
   tvHintText: {
     color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 18,
+    fontSize: scaleFont(16),
     textAlign: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
+    paddingVertical: scaleHeight(12),
+    paddingHorizontal: scaleWidth(24),
+    borderRadius: scaleWidth(8),
   },
 });
 

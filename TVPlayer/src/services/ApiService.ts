@@ -131,7 +131,8 @@ class ApiService {
   }
 
   async getPlaylistById(id: number): Promise<Playlist> {
-    const response = await this.api.get<ApiEnvelope<Playlist>>(`/playlists/${id}`);
+    // include=contents ile tüm içerik detaylarını al (ticker_text dahil)
+    const response = await this.api.get<ApiEnvelope<Playlist>>(`/playlists/${id}?include=contents`);
     return response.data.data;
   }
 

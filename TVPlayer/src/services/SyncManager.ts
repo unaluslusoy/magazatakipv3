@@ -89,6 +89,12 @@ class SyncManager {
             // Playlist içeriklerini al
             if (devicePlaylist.contents && devicePlaylist.contents.length > 0) {
               contents = devicePlaylist.contents.map((pc: any) => pc.content || pc);
+              // Debug: ticker_text kontrolü
+              contents.forEach((c: any) => {
+                if (c.type === 'ticker') {
+                  console.log(`[SYNC] Ticker içerik ID:${c.id}, ticker_text:`, c.ticker_text ? c.ticker_text.substring(0, 50) : '(yok)');
+                }
+              });
             }
             console.log(`Cihaz playlist'i alındı: ${devicePlaylist.name}, ${contents.length} içerik`);
           }

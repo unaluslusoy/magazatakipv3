@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.0.5 (2026-01-06)
+
+### 🎯 Yeni Özellikler
+- **Ticker İyileştirmeleri**: Kayan yazı animasyonu daha yumuşak ve okunaklı
+- **API İyileştirmeleri**: Playlist alırken `include=contents` ile tüm içerik detayları
+- **ticker_text Desteği**: Backend'den gelen ticker_text alanı doğru gösteriliyor
+
+### 🔧 İyileştirmeler
+- Ticker font boyutu ve stil optimizasyonu
+- Ticker container arka plan rengi iyileştirildi
+- HTML etiketleri temizleme geliştirmeleri
+- Debug loglama eklendi (ticker_text kontrolü için)
+
+### 🐛 Hata Düzeltmeleri
+- Ticker yazı kesilmesi sorunu giderildi
+- Animasyon döngüsü düzeltildi
+- API yanıt formatı uyumluluğu
+
+---
+
 ## v1.2.0 (2026-01-05)
 
 ### 🎯 Yeni Özellikler

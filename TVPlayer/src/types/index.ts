@@ -44,6 +44,7 @@ export interface Content {
   name: string;
   title?: string; // API'den gelebilir
   description?: string;
+  ticker_text?: string; // Kayan yazı metni
   type: 'image' | 'video' | 'slider' | 'ticker' | 'announcement' | 'template';
   file_url?: string;
   url?: string; // API'den bu şekilde de gelebilir
