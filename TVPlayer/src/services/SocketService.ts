@@ -2,8 +2,27 @@ import { io, Socket } from 'socket.io-client';
 import { API_CONFIG } from '@config/constants';
 import StorageService from './StorageService';
 import SyncManager from './SyncManager';
-import DeviceInfoService from './DeviceInfoService';
-import RNRestart from 'react-native-restart';
+
+// DeviceInfoService lazy load - import edildiginde netinfo hatasi veriyor
+let _deviceInfoService: any = null;
+const getDeviceInfoService = () => {
+  if (!_deviceInfoService) {
+    try {
+      _deviceInfoService = require('./DeviceInfoService').default;
+    } catch (e) {
+      console.warn('DeviceInfoService yuklenemedi');
+    }
+  }
+  return _deviceInfoService;
+};
+
+// RNRestart opsiyonel
+let RNRestart: any = null;
+try {
+  RNRestart = require('react-native-restart').default;
+} catch (e) {
+  console.warn('react-native-restart yuklenemedi');
+}
 
 /**
  * WebSocket Service
@@ -84,7 +103,9 @@ class SocketService {
     // Listen for reload commands
     this.socket.on('reload', () => {
       console.log('Reload command received');
-      RNRestart.restart();
+      if (RNRestart) {
+        RNRestart.restart();
+      }
     });
 
     // Listen for device commands from admin panel
@@ -126,7 +147,9 @@ class SocketService {
 
         case 'RESTART_APP':
           this.emit('command:completed', { command, success: true });
-          setTimeout(() => RNRestart.restart(), 500);
+          if (RNRestart) {
+            setTimeout(() => RNRestart.restart(), 500);
+          }
           break;
 
         case 'SYNC_NOW':
@@ -189,6 +212,7 @@ class SocketService {
    */
   async sendDeviceInfo(): Promise<void> {
     try {
+      const DeviceInfoService = getDeviceInfoService();
       const deviceInfo = await DeviceInfoService.getFullDeviceInfo();
       this.emit('device:info', deviceInfo);
       console.log('Cihaz bilgileri gonderildi');
@@ -202,6 +226,7 @@ class SocketService {
    */
   async sendScreenshot(): Promise<void> {
     try {
+      const DeviceInfoService = getDeviceInfoService();
       const screenshot = await DeviceInfoService.captureScreenshot();
       if (screenshot) {
         this.emit('device:screenshot', {

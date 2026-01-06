@@ -1,5 +1,4 @@
 import { Platform, Dimensions, PixelRatio } from 'react-native';
-import NetInfo from '@react-native-community/netinfo';
 import RNFS from 'react-native-fs';
 
 // DeviceInfo opsiyonel - native modul hata verirse fallback kullan
@@ -8,6 +7,14 @@ try {
   DeviceInfo = require('react-native-device-info').default;
 } catch (e) {
   console.warn('react-native-device-info yuklenemedi, fallback kullanilacak');
+}
+
+// NetInfo opsiyonel - native modul hata verebilir
+let NetInfo: any = null;
+try {
+  NetInfo = require('@react-native-community/netinfo').default;
+} catch (e) {
+  console.warn('@react-native-community/netinfo yuklenemedi');
 }
 
 // ViewShot opsiyonel
@@ -71,8 +78,8 @@ class DeviceInfoService {
 
       // Zaman
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      locale: Platform.OS === 'android' ? 'tr-TR' : DeviceInfo.getDeviceLocale(),
-      uptime: await DeviceInfo.getUptime(),
+      locale: 'tr-TR',
+      uptime: await safeGetAsync(() => DeviceInfo.getUptime(), 0),
     };
   }
 
@@ -86,26 +93,28 @@ class DeviceInfoService {
       let ipAddress = 'Bilinmiyor';
       let macAddress = 'Bilinmiyor';
 
-      try {
-        ipAddress = await DeviceInfo.getIpAddress();
-      } catch {
-        // IP alinamazsa devam et
-      }
+      if (DeviceInfo) {
+        try {
+          ipAddress = await DeviceInfo.getIpAddress();
+        } catch {
+          // IP alinamazsa devam et
+        }
 
-      try {
-        macAddress = await DeviceInfo.getMacAddress();
-      } catch {
-        // MAC alinamazsa devam et
+        try {
+          macAddress = await DeviceInfo.getMacAddress();
+        } catch {
+          // MAC alinamazsa devam et
+        }
       }
 
       return {
         ip_address: ipAddress,
         mac_address: macAddress,
-        connection_type: netInfo.type,
-        is_connected: netInfo.isConnected ?? false,
-        is_wifi: netInfo.type === 'wifi',
-        wifi_ssid: (netInfo.details as any)?.ssid || null,
-        signal_strength: (netInfo.details as any)?.strength || null,
+        connection_type: connectionType,
+        is_connected: isConnected,
+        is_wifi: isWifi,
+        wifi_ssid: wifiSsid,
+        signal_strength: signalStrength,
       };
     } catch (error) {
       console.error('Ag bilgisi alinamadi:', error);
