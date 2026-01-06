@@ -3,6 +3,7 @@ import StorageService from './StorageService';
 import DownloadManager from './DownloadManager';
 import SyncManager from './SyncManager';
 import SocketService from './SocketService';
+import ScreenShareService from './ScreenShareService';
 
 /**
  * App Initializer
@@ -22,6 +23,21 @@ export async function initializeApp(): Promise<void> {
     const isLoggedIn = await StorageService.isLoggedIn();
 
     if (isLoggedIn) {
+      // Cihaz bilgilerini native modüle kaydet (ekran paylaşımı için)
+      try {
+        const token = await StorageService.getAuthToken();
+        const deviceInfo = await StorageService.getDeviceInfo();
+        if (token && deviceInfo) {
+          await ScreenShareService.setDeviceInfo(
+            deviceInfo.device_code,
+            token.token
+          );
+          console.log('Cihaz bilgileri native modüle kaydedildi');
+        }
+      } catch (e) {
+        console.log('Cihaz bilgileri kaydetme atlandı:', e);
+      }
+
       // Start sync
       SyncManager.startAutoSync();
 

@@ -1,5 +1,37 @@
 # Changelog
 
+## v1.0.7 (2026-01-06)
+
+### 🖥️ Uzaktan Ekran Kontrolü (Admin Panel)
+
+#### Yeni Dosyalar
+- **ScreenShareService.kt**: Ekran yakalama ve backend'e frame gönderme
+- **ScreenCaptureActivity.kt**: MediaProjection izni alma
+- **ScreenShareModule.kt**: React Native native modül
+- **ScreenSharePackage.kt**: RN package tanımı
+- **ScreenShareService.ts**: TypeScript wrapper
+
+#### Özellikler
+- Admin panelden cihaz ekranını canlı izleme
+- WebSocket üzerinden frame streaming (2 FPS, ~50KB/frame)
+- MediaProjection API ile ekran yakalama
+- Kullanıcı izni bir kez alınır (ilk kurulumda)
+- Socket komutları: `screen:start`, `screen:stop`
+
+#### Konfigürasyon
+- Frame interval: 500ms (2 FPS)
+- JPEG kalitesi: 50%
+- Çözünürlük: Yarı HD (0.5x scale)
+- Bant genişliği: ~0.5-0.8 Mbps
+
+### 📋 Backend Gereksinimleri
+- `POST /api/devices/screen-frame` endpoint'i
+- Socket.io `screen:start`, `screen:stop` event handler'ları
+- Socket.io `screen:frame` event emitter (admin panele)
+- Detaylı dokümantasyon: `docs/SCREEN_SHARE_API.md`
+
+---
+
 ## v1.0.6 (2026-01-06)
 
 ### 🎯 Kiosk Modu İyileştirmeleri (Android 9+)

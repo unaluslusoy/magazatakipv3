@@ -38,6 +38,8 @@ class MainApplication : Application(), ReactApplication {
               ReactVideoPackage(),
               OrientationPackage(),
               VectorIconsPackage(),
+              // Custom modules
+              ScreenSharePackage(),
           )
         }
 
