@@ -193,12 +193,19 @@ const PlayerScreen = () => {
     fadeOut(() => {
       const prevIndex = (currentIndex - 1 + contents.length) % contents.length;
       const prevItem = contents[prevIndex];
-      const prevContent = prevItem.content || prevItem;
+      const baseContent = prevItem.content || prevItem;
+
+      // duration_override'ı content'e ekle
+      const prevContent = {
+        ...baseContent,
+        duration_override: prevItem.duration_override || prevItem.duration || null,
+        duration: prevItem.duration || baseContent.duration || baseContent.duration_seconds,
+      };
 
       setCurrentIndex(prevIndex);
       setCurrentContent(prevContent);
 
-      console.log('PlayerScreen: Önceki içerik:', prevContent?.title || prevContent?.name);
+      console.log('PlayerScreen: Önceki içerik:', prevContent?.name || prevContent?.title, 'Süre:', prevContent.duration);
     });
   }, [currentPlaylist, currentIndex]);
 
@@ -344,23 +351,36 @@ const PlayerScreen = () => {
       // Storage'dan güncel içerikleri al (local_path güncellenmiş olabilir)
       const storedContents = await StorageService.getContents();
 
-      // Contents'ı local_path ile güncelle
+      // Contents'ı local_path ile güncelle ve duration bilgilerini aktar
       const updatedContents = contents.map((item: any) => {
         const content = item.content || item;
         const stored = storedContents.find((c: any) => c.id === content.id || c.id === content.content_id);
-        if (stored?.local_path) {
-          return { ...item, content: { ...content, local_path: stored.local_path } };
-        }
-        return item;
+
+        // Content'e playlist_content'ten gelen duration_override'ı ekle
+        const mergedContent = {
+          ...content,
+          duration_override: item.duration_override || item.duration || null,
+          duration: item.duration || content.duration || content.duration_seconds,
+          ...(stored?.local_path ? { local_path: stored.local_path } : {}),
+        };
+
+        return { ...item, content: mergedContent };
       });
 
       // İlk içeriği al - format: { content: {...} } veya doğrudan content objesi
       const firstItem = updatedContents[0];
-      const firstContent = firstItem.content || firstItem;
+      const baseContent = firstItem.content || firstItem;
+
+      // duration_override'ı content'e ekle
+      const firstContent = {
+        ...baseContent,
+        duration_override: firstItem.duration_override || firstItem.duration || null,
+        duration: firstItem.duration || baseContent.duration || baseContent.duration_seconds,
+      };
 
       // Debug: Tüm içerik yapısını logla
       console.log('PlayerScreen: İlk item raw:', JSON.stringify(firstItem, null, 2));
-      console.log('PlayerScreen: İlk içerik:', firstContent?.name || firstContent?.title, 'Tip:', firstContent?.type, 'ticker_text:', firstContent?.ticker_text);
+      console.log('PlayerScreen: İlk içerik:', firstContent?.name || firstContent?.title, 'Tip:', firstContent?.type, 'Süre:', firstContent.duration, 'ticker_text:', firstContent?.ticker_text);
 
       // Playlist'i güncellenmiş contents ile kaydet
       const updatedPlaylist = { ...playlist, contents: updatedContents };
@@ -411,12 +431,19 @@ const PlayerScreen = () => {
     fadeOut(() => {
       const nextIndex = (currentIndex + 1) % contents.length;
       const nextItem = contents[nextIndex];
-      const nextContent = nextItem.content || nextItem;
+      const baseContent = nextItem.content || nextItem;
+
+      // duration_override'ı content'e ekle
+      const nextContent = {
+        ...baseContent,
+        duration_override: nextItem.duration_override || nextItem.duration || null,
+        duration: nextItem.duration || baseContent.duration || baseContent.duration_seconds,
+      };
+
+      console.log('PlayerScreen: Sonraki içerik:', nextContent?.name || nextContent?.title, 'Süre:', nextContent.duration || nextContent.duration_override);
 
       setCurrentIndex(nextIndex);
       setCurrentContent(nextContent);
-
-      console.log('PlayerScreen: Sonraki içerik:', nextContent?.title || nextContent?.name);
     });
   }, [currentPlaylist, currentIndex]);
 
@@ -499,8 +526,25 @@ const PlayerScreen = () => {
 
   const getContentDuration = (content: Content | null): number => {
     if (!content) return 10000;
-    // API'den duration veya duration_seconds gelebilir
-    const seconds = content.duration || content.duration_seconds || 10;
+
+    // API'den farklı alanlarla gelebilir:
+    // - duration_override (playlist_content tablosundan)
+    // - duration (content tablosundan)
+    // - duration_seconds (content tablosundan)
+    const seconds = (content as any).duration_override
+      || content.duration
+      || content.duration_seconds
+      || 10;
+
+    console.log('PlayerScreen: İçerik süresi:', {
+      id: content.id,
+      name: content.name || content.title,
+      duration_override: (content as any).duration_override,
+      duration: content.duration,
+      duration_seconds: content.duration_seconds,
+      hesaplanan: seconds
+    });
+
     return seconds * 1000;
   };
 

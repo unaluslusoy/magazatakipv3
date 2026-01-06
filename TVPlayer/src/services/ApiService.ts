@@ -109,11 +109,12 @@ class ApiService {
 
   async sendHeartbeat(currentPlaylistId?: number, currentContentId?: number, isPlaying?: boolean): Promise<void> {
     try {
+      // Dinamik cihaz bilgilerini al
+      const DeviceInfoService = require('./DeviceInfoService').default;
+      const heartbeatInfo = await DeviceInfoService.getHeartbeatInfo();
+
       await this.api.post('/devices/heartbeat', {
-        app_version: APP_CONFIG.VERSION,
-        os_version: 'Android 13',
-        screen_resolution: '1920x1080',
-        free_storage_mb: 1024,
+        ...heartbeatInfo,
         current_playlist_id: currentPlaylistId,
         current_content_id: currentContentId,
         is_playing: isPlaying ?? true,

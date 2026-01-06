@@ -2,6 +2,8 @@ import { io, Socket } from 'socket.io-client';
 import { API_CONFIG } from '@config/constants';
 import StorageService from './StorageService';
 import SyncManager from './SyncManager';
+import DeviceInfoService from './DeviceInfoService';
+import RNRestart from 'react-native-restart';
 
 /**
  * WebSocket Service
@@ -11,6 +13,7 @@ class SocketService {
   private socket: Socket | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
+  private commandHandlers: Map<string, (params: any) => Promise<void>> = new Map();
 
   async connect(): Promise<void> {
     const token = await StorageService.getAuthToken();
@@ -81,8 +84,135 @@ class SocketService {
     // Listen for reload commands
     this.socket.on('reload', () => {
       console.log('Reload command received');
-      // Implement app reload logic
+      RNRestart.restart();
     });
+
+    // Listen for device commands from admin panel
+    this.socket.on('command:receive', async (data: any) => {
+      console.log('Komut alindi:', data.command);
+      await this.handleCommand(data.command, data.params || {});
+    });
+
+    // Listen for settings sync
+    this.socket.on('settings:sync', async (settings: any) => {
+      console.log('Ayarlar senkronize ediliyor:', settings);
+      await StorageService.saveSettings(settings);
+      this.emit('settings:synced', { success: true });
+    });
+
+    // Listen for device info request
+    this.socket.on('device:info_request', async () => {
+      console.log('Cihaz bilgisi istendi');
+      await this.sendDeviceInfo();
+    });
+
+    // Listen for screenshot request
+    this.socket.on('device:screenshot_request', async () => {
+      console.log('Ekran goruntusu istendi');
+      await this.sendScreenshot();
+    });
+  }
+
+  /**
+   * Komut isle
+   */
+  private async handleCommand(command: string, params: any): Promise<void> {
+    try {
+      switch (command) {
+        case 'REFRESH_CONTENT':
+          await SyncManager.sync();
+          this.emit('command:completed', { command, success: true });
+          break;
+
+        case 'RESTART_APP':
+          this.emit('command:completed', { command, success: true });
+          setTimeout(() => RNRestart.restart(), 500);
+          break;
+
+        case 'SYNC_NOW':
+          await SyncManager.sync();
+          this.emit('command:completed', { command, success: true });
+          break;
+
+        case 'GET_SCREENSHOT':
+          await this.sendScreenshot();
+          break;
+
+        case 'GET_DEVICE_INFO':
+          await this.sendDeviceInfo();
+          break;
+
+        case 'UPDATE_SETTINGS':
+          if (params.settings) {
+            await StorageService.saveSettings(params.settings);
+            this.emit('command:completed', { command, success: true });
+          }
+          break;
+
+        case 'CHANGE_PLAYLIST':
+          if (params.playlist_id) {
+            await StorageService.saveCurrentPlaylistId(params.playlist_id);
+            await SyncManager.sync();
+            this.emit('command:completed', { command, success: true });
+          }
+          break;
+
+        case 'CLEAR_CACHE':
+          await StorageService.clearCache();
+          this.emit('command:completed', { command, success: true });
+          break;
+
+        case 'SHOW_MESSAGE':
+          // Mesaj gosterme eventi gonder
+          this.emit('command:completed', {
+            command,
+            success: true,
+            show_message: {
+              message: params.message,
+              duration: params.duration || 5000
+            }
+          });
+          break;
+
+        default:
+          console.log('Bilinmeyen komut:', command);
+          this.emit('command:completed', { command, success: false, error: 'Bilinmeyen komut' });
+      }
+    } catch (error: any) {
+      console.error('Komut isleme hatasi:', error);
+      this.emit('command:completed', { command, success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Cihaz bilgilerini gonder
+   */
+  async sendDeviceInfo(): Promise<void> {
+    try {
+      const deviceInfo = await DeviceInfoService.getFullDeviceInfo();
+      this.emit('device:info', deviceInfo);
+      console.log('Cihaz bilgileri gonderildi');
+    } catch (error) {
+      console.error('Cihaz bilgisi gonderilemedi:', error);
+    }
+  }
+
+  /**
+   * Ekran goruntusunu gonder
+   */
+  async sendScreenshot(): Promise<void> {
+    try {
+      const screenshot = await DeviceInfoService.captureScreenshot();
+      if (screenshot) {
+        this.emit('device:screenshot', {
+          screenshot,
+          captured_at: new Date().toISOString()
+        });
+        console.log('Ekran goruntusu gonderildi');
+      }
+    } catch (error) {
+      console.error('Ekran goruntusu gonderilemedi:', error);
+    }
   }
 
   disconnect(): void {
