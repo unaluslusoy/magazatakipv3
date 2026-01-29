@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 11 (API 30) ve üzeri için tema ayarları -->
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- Tam ekran modu -->
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+
+        <!-- Status bar ve navigation bar gizle -->
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+
+        <!-- Arka plan siyah - dijital tabela için ideal -->
+        <item name="android:windowBackground">@android:color/black</item>
+
+        <!-- React Native edit text uyumluluğu -->
+        <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+
+        <!-- Android 11+ Notch/Cutout desteği - her zaman tam ekran -->
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+
+        <!-- Status bar ve navigation bar transparan -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+
+        <!-- Gesture navigation için kontrast zorlama kapalı -->
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+
+        <!-- Window insets - layout tam ekran -->
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowTranslucentNavigation">false</item>
+    </style>
+</resources>
+
