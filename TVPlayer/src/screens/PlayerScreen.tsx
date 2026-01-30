@@ -65,42 +65,51 @@ const stripHtml = (html: string): string => {
 };
 
 // Kayan yazı bileşeni - tam genişlikte yumuşak kaydırma
-const TickerText = ({ text, style }: { text: string; style?: any }) => {
+const TickerText = React.memo(({ text, style }: { text: string; style?: any }) => {
   const scrollAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const cleanText = stripHtml(text || ''); // Handle null/undefined
+  const cleanText = stripHtml(text || '');
   const [textWidth, setTextWidth] = useState(SCREEN_WIDTH * 2);
+  const isMounted = useRef(true);
 
   // Yazı uzunluğuna göre animasyon süresi - yavaş ve okunaklı
-  // Karakter başına ~250ms, minimum 15 saniye
   const duration = Math.max(15000, cleanText.length * 250);
 
   useEffect(() => {
+    isMounted.current = true;
+
     if (!cleanText) return;
 
-    // Animasyonu başlat
+    let animationRef: Animated.CompositeAnimation | null = null;
+
     const startAnimation = () => {
+      if (!isMounted.current) return;
+
       scrollAnim.setValue(SCREEN_WIDTH);
-      Animated.timing(scrollAnim, {
-        toValue: -(textWidth + 100), // Yazının tamamı ekrandan çıksın
+      animationRef = Animated.timing(scrollAnim, {
+        toValue: -(textWidth + 100),
         duration: duration,
         useNativeDriver: true,
         isInteraction: false,
-      }).start(({ finished }) => {
-        if (finished) {
-          // Döngü - başa dön
+      });
+
+      animationRef.start(({ finished }) => {
+        if (finished && isMounted.current) {
           startAnimation();
         }
       });
     };
 
-    // İlk başlatma
     const timer = setTimeout(startAnimation, 500);
 
     return () => {
+      isMounted.current = false;
       clearTimeout(timer);
+      if (animationRef) {
+        animationRef.stop();
+      }
       scrollAnim.stopAnimation();
     };
-  }, [cleanText, duration, textWidth]);
+  }, [cleanText, duration, textWidth, scrollAnim]);
 
   if (!cleanText) return null;
 
@@ -108,7 +117,7 @@ const TickerText = ({ text, style }: { text: string; style?: any }) => {
     <Animated.Text
       style={[
         {
-          fontSize: scaleFont(48), // Okunabilir font boyutu
+          fontSize: scaleFont(48),
           color: '#ffffff',
           fontWeight: 'bold',
           position: 'absolute',
@@ -125,7 +134,7 @@ const TickerText = ({ text, style }: { text: string; style?: any }) => {
       ]}
       onLayout={(e) => {
         const width = e.nativeEvent.layout.width;
-        if (width > 0) {
+        if (width > 0 && width !== textWidth) {
           setTextWidth(width);
         }
       }}
@@ -134,7 +143,7 @@ const TickerText = ({ text, style }: { text: string; style?: any }) => {
       {cleanText}
     </Animated.Text>
   );
-};
+});
 
 // İndirme durumu tipi
 interface DownloadStatus {
@@ -355,10 +364,10 @@ const PlayerScreen = () => {
   useEffect(() => {
     loadPlaylist();
 
-    // Check schedule every minute
+    // Check schedule every 5 minutes (300000ms) - not every minute for performance
     const scheduleInterval = setInterval(() => {
       checkScheduleChange();
-    }, 60000);
+    }, 300000);
 
     return () => clearInterval(scheduleInterval);
   }, []);
@@ -769,8 +778,10 @@ const PlayerScreen = () => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Yükleniyor...</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3DDC84" />
+          <Text style={styles.loadingText}>İçerikler yükleniyor...</Text>
+        </View>
       </View>
     );
   }
@@ -778,10 +789,19 @@ const PlayerScreen = () => {
   if (!currentContent) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>İçerik bulunamadı</Text>
-        <TouchableOpacity style={styles.button} onPress={handleSync}>
-          <Text style={styles.buttonText}>Senkronize Et</Text>
-        </TouchableOpacity>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorIcon}>📺</Text>
+          <Text style={styles.errorTitle}>İçerik Bulunamadı</Text>
+          <Text style={styles.errorSubtitle}>
+            Panelden bu cihaza içerik atandığından emin olun
+          </Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={handleSync}
+            activeOpacity={0.8}>
+            <Text style={styles.retryButtonText}>↻ Yenile</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -1069,10 +1089,47 @@ const styles = StyleSheet.create({
     paddingVertical: scaleHeight(20),
     position: 'relative',
   },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   loadingText: {
+    color: '#aaa',
+    fontSize: scaleFont(22),
+    marginTop: scaleHeight(24),
+  },
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: scaleWidth(40),
+  },
+  errorIcon: {
+    fontSize: 80,
+    marginBottom: scaleHeight(20),
+  },
+  errorTitle: {
     color: '#fff',
-    fontSize: scaleFont(24),
-    marginTop: scaleHeight(20),
+    fontSize: scaleFont(32),
+    fontWeight: 'bold',
+    marginBottom: scaleHeight(12),
+  },
+  errorSubtitle: {
+    color: '#888',
+    fontSize: scaleFont(18),
+    textAlign: 'center',
+    marginBottom: scaleHeight(40),
+    maxWidth: 400,
+  },
+  retryButton: {
+    backgroundColor: '#3DDC84',
+    borderRadius: scaleWidth(12),
+    paddingVertical: scaleHeight(16),
+    paddingHorizontal: scaleWidth(48),
+  },
+  retryButtonText: {
+    color: '#000',
+    fontSize: scaleFont(20),
+    fontWeight: 'bold',
   },
   // İndirme durumu stilleri
   downloadContainer: {

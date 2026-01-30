@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Linking,
+  Animated,
 } from 'react-native';
 import { APP_CONFIG } from '@config/constants';
 
@@ -16,10 +17,26 @@ interface PermissionScreenProps {
 }
 
 export const PermissionScreen: React.FC<PermissionScreenProps> = ({ onPermissionsGranted }) => {
-  const [isChecking, setIsChecking] = useState(true);
   const [permissionStatus, setPermissionStatus] = useState<'checking' | 'granted' | 'denied'>('checking');
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
   useEffect(() => {
+    // Giriş animasyonu
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
     requestAllPermissions();
   }, []);
 
@@ -29,7 +46,6 @@ export const PermissionScreen: React.FC<PermissionScreenProps> = ({ onPermission
       return;
     }
 
-    setIsChecking(true);
     setPermissionStatus('checking');
 
     try {
@@ -58,7 +74,14 @@ export const PermissionScreen: React.FC<PermissionScreenProps> = ({ onPermission
           console.log('Tüm izinler verildi');
         }
         setPermissionStatus('granted');
-        setTimeout(onPermissionsGranted, 250);
+        // Animasyonlu geçiş
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => {
+          onPermissionsGranted();
+        });
       } else {
         if (APP_CONFIG.ENABLE_DEBUG) {
           console.log('Bazı izinler reddedildi');
@@ -70,40 +93,53 @@ export const PermissionScreen: React.FC<PermissionScreenProps> = ({ onPermission
         console.error('İzin hatası:', err);
       }
       setPermissionStatus('denied');
-    } finally {
-      setIsChecking(false);
     }
   };
 
   if (permissionStatus === 'denied') {
     return (
-      <View style={styles.container}>
+      <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+        <View style={styles.iconContainer}>
+          <Text style={styles.icon}>🔐</Text>
+        </View>
         <Text style={styles.errorTitle}>İzin Gerekli</Text>
         <Text style={styles.errorText}>
-          Uygulamanın içerikleri gösterebilmesi için cihaza kayıtlı medya dosyalarına erişim izni gerekiyor.
-          {'\n\n'}
-          Lütfen “Tekrar İste” ile izin verin. Olmazsa “Ayarları Aç” ile izinleri manuel olarak açın.
+          Uygulamanın içerikleri gösterebilmesi için medya dosyalarına erişim izni gerekiyor.
         </Text>
 
-        <TouchableOpacity style={styles.button} onPress={requestAllPermissions}>
-          <Text style={styles.buttonText}>Tekrar İste</Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={requestAllPermissions}
+          activeOpacity={0.8}>
+          <Text style={styles.buttonText}>İzin Ver</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.button, styles.secondaryButton]}
-          onPress={() => Linking.openSettings()}>
+          onPress={() => Linking.openSettings()}
+          activeOpacity={0.8}>
           <Text style={[styles.buttonText, styles.secondaryButtonText]}>Ayarları Aç</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" color="#3DDC84" />
-      <Text style={styles.text}>Hazırlanıyor…</Text>
-      <Text style={styles.subText}>İlk kurulum kontrolleri yapılıyor</Text>
-    </View>
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          opacity: fadeAnim,
+          transform: [{ scale: scaleAnim }],
+        },
+      ]}>
+      <View style={styles.logoContainer}>
+        <Text style={styles.logoText}>MP</Text>
+      </View>
+      <ActivityIndicator size="large" color="#3DDC84" style={styles.loader} />
+      <Text style={styles.text}>Mağaza Pano</Text>
+      <Text style={styles.subText}>Hazırlanıyor...</Text>
+    </Animated.View>
   );
 };
 
@@ -113,37 +149,64 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#1a1a1a',
-    padding: 20,
+    padding: 30,
+  },
+  logoContainer: {
+    width: 100,
+    height: 100,
+    backgroundColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 3,
+    borderColor: '#3DDC84',
+    borderRadius: 20,
+  },
+  logoText: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#3DDC84',
+  },
+  loader: {
+    marginBottom: 20,
   },
   text: {
     color: '#ffffff',
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    marginTop: 20,
   },
   subText: {
     color: '#888888',
-    fontSize: 16,
-    marginTop: 10,
+    fontSize: 18,
+    marginTop: 8,
   },
-  errorTitle: {
-    color: '#ff4444',
-    fontSize: 28,
-    fontWeight: 'bold',
+  iconContainer: {
     marginBottom: 20,
   },
+  icon: {
+    fontSize: 64,
+  },
+  errorTitle: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
   errorText: {
-    color: '#cccccc',
+    color: '#aaaaaa',
     fontSize: 18,
     textAlign: 'center',
-    marginBottom: 30,
-    lineHeight: 24,
+    marginBottom: 40,
+    lineHeight: 26,
+    maxWidth: 400,
   },
   button: {
     backgroundColor: '#3DDC84',
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-    borderRadius: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 12,
+    minWidth: 200,
+    alignItems: 'center',
   },
   buttonText: {
     color: '#000',
@@ -154,7 +217,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderWidth: 2,
     borderColor: '#3DDC84',
-    marginTop: 12,
+    marginTop: 16,
   },
   secondaryButtonText: {
     color: '#3DDC84',

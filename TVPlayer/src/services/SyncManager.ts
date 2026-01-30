@@ -59,30 +59,23 @@ class SyncManager {
     try {
       const heartbeatResponse = await ApiService.sendHeartbeat();
 
-      console.log('[SyncManager] Heartbeat:', {
-        sync_required: heartbeatResponse.sync_required,
-        server_version: heartbeatResponse.server_version,
-        device_version: heartbeatResponse.device_version,
-        pending_commands: heartbeatResponse.pending_commands?.length || 0,
-      });
-
       // Bekleyen komutlar varsa işle
       if (heartbeatResponse.pending_commands && heartbeatResponse.pending_commands.length > 0) {
         try {
           const CommandProcessor = require('./CommandProcessor').default;
           await CommandProcessor.processPendingCommands(heartbeatResponse.pending_commands);
         } catch (cmdError) {
-          console.warn('[SyncManager] Komut işleme hatası:', cmdError);
+          // Komut hatası kritik değil
         }
       }
 
       // Senkronizasyon gerekli mi?
       if (heartbeatResponse.sync_required) {
-        console.log('[SyncManager] Senkronizasyon gerekli, başlatılıyor...');
+        console.log('[SyncManager] Senkronizasyon başlatılıyor...');
         await this.sync();
       }
     } catch (error: any) {
-      console.log('[SyncManager] Heartbeat hatası:', error?.message || error);
+      // Heartbeat hatası kritik değil, sessizce devam et
     }
   }
 

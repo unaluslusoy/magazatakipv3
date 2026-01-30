@@ -12,6 +12,7 @@ import StorageService from '@services/StorageService';
 import DownloadManager from '@services/DownloadManager';
 import SyncManager from '@services/SyncManager';
 import ApiService from '@services/ApiService';
+import { APP_CONFIG } from '@config/constants';
 import type { Device, SyncStatus } from '@types/index';
 
 const SettingsScreen = () => {
@@ -137,7 +138,7 @@ const SettingsScreen = () => {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.version}>Versiyon 1.0.0</Text>
+        <Text style={styles.version}>Versiyon {APP_CONFIG.VERSION}</Text>
       </ScrollView>
     </View>
   );
