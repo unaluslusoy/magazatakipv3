@@ -25,6 +25,24 @@ try {
   console.warn('react-native-view-shot yuklenemedi');
 }
 
+// Guvenli async cagri helper
+async function safeGetAsync<T>(fn: () => Promise<T>, defaultValue: T): Promise<T> {
+  try {
+    return await fn();
+  } catch {
+    return defaultValue;
+  }
+}
+
+// Guvenli sync cagri helper
+function safeGet<T>(fn: () => T, defaultValue: T): T {
+  try {
+    return fn();
+  } catch {
+    return defaultValue;
+  }
+}
+
 /**
  * Device Info Service
  * Cihaz bilgilerini toplar ve yonetir
@@ -45,18 +63,18 @@ class DeviceInfoService {
 
     return {
       // Cihaz bilgileri
-      device_id: await DeviceInfo.getUniqueId(),
-      device_name: await DeviceInfo.getDeviceName(),
-      brand: DeviceInfo.getBrand(),
-      model: DeviceInfo.getModel(),
-      device_type: DeviceInfo.getDeviceType(),
+      device_id: await safeGetAsync(() => DeviceInfo?.getUniqueId(), 'unknown'),
+      device_name: await safeGetAsync(() => DeviceInfo?.getDeviceName(), 'Bilinmeyen Cihaz'),
+      brand: safeGet(() => DeviceInfo?.getBrand(), 'Bilinmiyor'),
+      model: safeGet(() => DeviceInfo?.getModel(), 'Bilinmiyor'),
+      device_type: safeGet(() => DeviceInfo?.getDeviceType(), 'Bilinmiyor'),
 
       // Sistem bilgileri
       os: Platform.OS,
-      os_version: DeviceInfo.getSystemVersion(),
+      os_version: safeGet(() => DeviceInfo?.getSystemVersion(), 'Bilinmiyor'),
       api_level: Platform.Version,
-      app_version: DeviceInfo.getVersion(),
-      build_number: DeviceInfo.getBuildNumber(),
+      app_version: safeGet(() => DeviceInfo?.getVersion(), '1.0.0'),
+      build_number: safeGet(() => DeviceInfo?.getBuildNumber(), '1'),
 
       // Ekran bilgileri
       screen_resolution: `${screenWidth}x${screenHeight}`,
@@ -71,15 +89,15 @@ class DeviceInfoService {
       ...storageInfo,
 
       // Diger
-      is_tablet: DeviceInfo.isTablet(),
-      is_emulator: await DeviceInfo.isEmulator(),
+      is_tablet: safeGet(() => DeviceInfo?.isTablet(), false),
+      is_emulator: await safeGetAsync(() => DeviceInfo?.isEmulator(), false),
       battery_level: await this.getBatteryLevel(),
-      is_charging: await DeviceInfo.isBatteryCharging(),
+      is_charging: await safeGetAsync(() => DeviceInfo?.isBatteryCharging(), false),
 
       // Zaman
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       locale: 'tr-TR',
-      uptime: await safeGetAsync(() => DeviceInfo.getUptime(), 0),
+      uptime: await safeGetAsync(() => DeviceInfo?.getUptime(), 0),
     };
   }
 
@@ -87,8 +105,36 @@ class DeviceInfoService {
    * Ag bilgilerini al
    */
   async getNetworkInfo(): Promise<NetworkInfoData> {
+    const defaultNetwork: NetworkInfoData = {
+      ip_address: 'Bilinmiyor',
+      mac_address: 'Bilinmiyor',
+      connection_type: 'unknown',
+      is_connected: false,
+      is_wifi: false,
+      wifi_ssid: null,
+      signal_strength: null,
+    };
+
     try {
-      const netInfo = await NetInfo.fetch();
+      let connectionType = 'unknown';
+      let isConnected = false;
+      let isWifi = false;
+      let wifiSsid: string | null = null;
+      let signalStrength: number | null = null;
+
+      // NetInfo'dan ag durumunu al
+      if (NetInfo) {
+        try {
+          const netInfo = await NetInfo.fetch();
+          connectionType = netInfo?.type || 'unknown';
+          isConnected = netInfo?.isConnected || false;
+          isWifi = netInfo?.type === 'wifi';
+          wifiSsid = netInfo?.details?.ssid || null;
+          signalStrength = netInfo?.details?.strength || null;
+        } catch (e) {
+          console.warn('NetInfo alinamadi:', e);
+        }
+      }
 
       let ipAddress = 'Bilinmiyor';
       let macAddress = 'Bilinmiyor';
@@ -118,15 +164,7 @@ class DeviceInfoService {
       };
     } catch (error) {
       console.error('Ag bilgisi alinamadi:', error);
-      return {
-        ip_address: 'Bilinmiyor',
-        mac_address: 'Bilinmiyor',
-        connection_type: 'unknown',
-        is_connected: false,
-        is_wifi: false,
-        wifi_ssid: null,
-        signal_strength: null,
-      };
+      return defaultNetwork;
     }
   }
 
@@ -158,6 +196,7 @@ class DeviceInfoService {
    * Batarya seviyesini al
    */
   async getBatteryLevel(): Promise<number> {
+    if (!DeviceInfo) return -1;
     try {
       const level = await DeviceInfo.getBatteryLevel();
       return Math.round(level * 100);
@@ -170,6 +209,10 @@ class DeviceInfoService {
    * Ekran goruntusu al (base64)
    */
   async captureScreenshot(): Promise<string | null> {
+    if (!captureScreen) {
+      console.warn('captureScreen modulu yuklu degil');
+      return null;
+    }
     try {
       const uri = await captureScreen({
         format: 'jpg',
@@ -197,13 +240,14 @@ class DeviceInfoService {
     const screenHeight = Math.round(height * PixelRatio.get());
 
     return {
-      app_version: DeviceInfo.getVersion(),
-      os_version: `Android ${DeviceInfo.getSystemVersion()}`,
+      app_version: safeGet(() => DeviceInfo?.getVersion(), '1.0.0'),
+      os_version: `Android ${safeGet(() => DeviceInfo?.getSystemVersion(), 'Bilinmiyor')}`,
       screen_resolution: `${screenWidth}x${screenHeight}`,
       free_storage_mb: storageInfo.free_storage_mb,
       ip_address: networkInfo.ip_address,
+      mac_address: networkInfo.mac_address,
       battery_level: await this.getBatteryLevel(),
-      is_charging: await DeviceInfo.isBatteryCharging(),
+      is_charging: await safeGetAsync(() => DeviceInfo?.isBatteryCharging(), false),
       connection_type: networkInfo.connection_type,
     };
   }
@@ -268,6 +312,7 @@ interface HeartbeatData {
   screen_resolution: string;
   free_storage_mb: number;
   ip_address: string;
+  mac_address: string;
   battery_level: number;
   is_charging: boolean;
   connection_type: string;

@@ -18,6 +18,7 @@ import StorageService from '@services/StorageService';
 import SyncManager from '@services/SyncManager';
 import ScheduleManager from '@services/ScheduleManager';
 import DownloadManager from '@services/DownloadManager';
+import CommandProcessor from '@services/CommandProcessor';
 import Logger from '@services/Logger';
 import type { Playlist, Content } from '@types/index';
 import { useNavigation } from '@react-navigation/native';
@@ -151,6 +152,27 @@ const PlayerScreen = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showControls, setShowControls] = useState(false);
+  const [lastPlaylistSignature, setLastPlaylistSignature] = useState<string | null>(null);
+  const [mediaInstanceKey, setMediaInstanceKey] = useState(0);
+  const [videoSeconds, setVideoSeconds] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [videoRestartCount, setVideoRestartCount] = useState(0);
+
+  const videoRef = useRef<Video>(null);
+  const lastProgressRef = useRef(0);
+  const lastProgressAtRef = useRef(Date.now());
+  const resumeAtRef = useRef(0);
+
+  // Video içerik değişince sayaçları ve yeniden başlatma durumunu sıfırla
+  useEffect(() => {
+    if (!currentContent || currentContent.type !== 'video') return;
+    setVideoSeconds(0);
+    setVideoDuration(0);
+    setVideoRestartCount(0);
+    resumeAtRef.current = 0;
+    lastProgressRef.current = 0;
+    lastProgressAtRef.current = Date.now();
+  }, [currentContent?.id, currentContent?.type]);
 
   // İndirme durumu
   const [downloadStatus, setDownloadStatus] = useState<DownloadStatus>({
@@ -276,6 +298,24 @@ const PlayerScreen = () => {
     };
   }, [handleTVEvent]);
 
+  // Command listener - Panel'den gelen komutları dinle
+  useEffect(() => {
+    const handleCommand = (command: string) => {
+      console.log('[PlayerScreen] Komut alındı:', command);
+
+      if (command === 'REFRESH_CONTENT' || command === 'UPDATE_SETTINGS') {
+        // Playlist'i yeniden yükle
+        loadPlaylist();
+      }
+    };
+
+    CommandProcessor.addListener(handleCommand);
+
+    return () => {
+      CommandProcessor.removeListener(handleCommand);
+    };
+  }, []);
+
   // Back button handler
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -348,6 +388,14 @@ const PlayerScreen = () => {
         return;
       }
 
+      // Playlist imzası (versiyon/updated_at değiştiyse yeniden indir)
+      const playlistSignature = `${playlist.id}:${(playlist as any).version || ''}:${playlist.updated_at || ''}`;
+      const forceDownload = lastPlaylistSignature !== playlistSignature;
+      if (forceDownload) {
+        console.log('PlayerScreen: Playlist güncellendi, tüm içerikler yeniden indiriliyor...');
+        setLastPlaylistSignature(playlistSignature);
+      }
+
       // Storage'dan güncel içerikleri al (local_path güncellenmiş olabilir)
       const storedContents = await StorageService.getContents();
 
@@ -367,8 +415,25 @@ const PlayerScreen = () => {
         return { ...item, content: mergedContent };
       });
 
+      // İndirme zorunlu: yeni playlist veya local_path eksikse indir
+      await ensureOfflineCopies(updatedContents, forceDownload);
+
+      // İndirme sonrası local_path güncelle
+      const storedContentsAfter = await StorageService.getContents();
+      const updatedContentsAfter = contents.map((item: any) => {
+        const content = item.content || item;
+        const stored = storedContentsAfter.find((c: any) => c.id === content.id || c.id === content.content_id);
+        const mergedContent = {
+          ...content,
+          duration_override: item.duration_override || item.duration || null,
+          duration: item.duration || content.duration || content.duration_seconds,
+          ...(stored?.local_path ? { local_path: stored.local_path } : {}),
+        };
+        return { ...item, content: mergedContent };
+      });
+
       // İlk içeriği al - format: { content: {...} } veya doğrudan content objesi
-      const firstItem = updatedContents[0];
+      const firstItem = updatedContentsAfter[0];
       const baseContent = firstItem.content || firstItem;
 
       // duration_override'ı content'e ekle
@@ -383,7 +448,7 @@ const PlayerScreen = () => {
       console.log('PlayerScreen: İlk içerik:', firstContent?.name || firstContent?.title, 'Tip:', firstContent?.type, 'Süre:', firstContent.duration, 'ticker_text:', firstContent?.ticker_text);
 
       // Playlist'i güncellenmiş contents ile kaydet
-      const updatedPlaylist = { ...playlist, contents: updatedContents };
+      const updatedPlaylist = { ...playlist, contents: updatedContentsAfter };
 
       setCurrentPlaylist(updatedPlaylist);
       setCurrentContent(firstContent);
@@ -448,11 +513,24 @@ const PlayerScreen = () => {
   }, [currentPlaylist, currentIndex]);
 
 
-  const handleVideoEnd = () => {
-    playNext();
+  const getExpectedVideoDurationSec = (content: Content | null) => {
+    if (!content) return 0;
+    const durationOverride = (content as any).duration_override;
+    const duration = content.duration;
+    const durationSeconds = content.duration_seconds;
+    return durationOverride || duration || durationSeconds || 0;
   };
 
-  const handleVideoError = (error: any) => {
+  const handleVideoEnd = useCallback(() => {
+    console.log('PlayerScreen: Video tamamlandı, sonraki içeriğe geçiliyor...');
+
+    // Kısa bir gecikme ile sonraki içeriğe geç (player'ın temizlenmesi için)
+    setTimeout(() => {
+      playNext();
+    }, 300);
+  }, [playNext]);
+
+  const handleVideoError = useCallback((error: any) => {
     if (APP_CONFIG.ENABLE_DEBUG) {
       console.error('Video error:', error);
     }
@@ -460,9 +538,9 @@ const PlayerScreen = () => {
     setTimeout(() => {
       playNext();
     }, 2000);
-  };
+  }, [playNext]);
 
-  const handleImageError = (error: any) => {
+  const handleImageError = useCallback((error: any) => {
     if (APP_CONFIG.ENABLE_DEBUG) {
       console.error('Image error:', error);
     }
@@ -470,7 +548,7 @@ const PlayerScreen = () => {
     setTimeout(() => {
       playNext();
     }, 2000);
-  };
+  }, [playNext]);
 
   // Auto-advance for images, ticker, and other non-video content
   useEffect(() => {
@@ -507,48 +585,149 @@ const PlayerScreen = () => {
   }, [navigation]);
 
   const getFileUri = (content: Content | null) => {
-    if (!content) return '';
-
-    // Önce local_path kontrol et (önbellekteki dosya)
-    if (content.local_path) {
-      // file:// prefix ekle
-      const localPath = content.local_path.startsWith('file://')
-        ? content.local_path
-        : `file://${content.local_path}`;
-      return localPath;
+    if (!content) {
+      console.log('PlayerScreen: Content null!');
+      return '';
     }
 
-    // Yoksa URL kullan (online)
-    const path = content.file_url || content.url;
-    if (!path) return '';
-    return path;
+    // Önbellekteki dosya varsa her zaman onu kullan (offline destek)
+    if (content.local_path) {
+      // RN'de yerel dosya için file:// prefix'i ekle
+      const localUri = content.local_path.startsWith('file://')
+        ? content.local_path
+        : `file://${content.local_path}`;
+      console.log('PlayerScreen: local_path kullanılıyor:', localUri);
+      return localUri;
+    }
+
+    // Online URL'yi hazırla
+    let path = content.file_url || content.url || '';
+
+    console.log('PlayerScreen: getFileUri - raw path:', path, 'type:', content.type);
+
+    if (!path) {
+      console.log('PlayerScreen: URL bulunamadı, içerik:', content.name || content.id);
+      return '';
+    }
+
+    // Backslash'leri düzelt (API'den escape edilmiş gelebilir)
+    path = path.replace(/\\\//g, '/');
+
+    // Eğer zaten tam URL ise direkt döndür
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      console.log('PlayerScreen: Tam URL kullanılıyor:', path);
+      return path;
+    }
+
+    // Relative path ise base URL ekle
+    const baseUrl = 'https://pano.magazatakip.com.tr';
+
+    // Path başında / varsa kaldır
+    if (path.startsWith('/')) {
+      path = path.substring(1);
+    }
+
+    // images/ veya videos/ ile başlıyorsa uploads/ prefix'i ekle
+    if (path.startsWith('images/') || path.startsWith('videos/')) {
+      path = `uploads/${path}`;
+    }
+
+    const fullUrl = `${baseUrl}/${path}`;
+    console.log('PlayerScreen: Full URL oluşturuldu:', fullUrl);
+    return fullUrl;
   };
 
   const getContentDuration = (content: Content | null): number => {
     if (!content) return 10000;
 
     // API'den farklı alanlarla gelebilir:
-    // - duration_override (playlist_content tablosundan)
-    // - duration (content tablosundan)
+    // - duration_override (playlist_content tablosundan - öncelikli)
+    // - duration (content tablosundan veya playlist_content'ten)
     // - duration_seconds (content tablosundan)
-    const seconds = (content as any).duration_override
-      || content.duration
-      || content.duration_seconds
-      || 10;
+    const durationOverride = (content as any).duration_override;
+    const duration = content.duration;
+    const durationSeconds = content.duration_seconds;
 
-    console.log('PlayerScreen: İçerik süresi:', {
+    // Öncelik sırası: duration_override > duration > duration_seconds > 10 (varsayılan)
+    let seconds = 10; // varsayılan
+
+    if (durationOverride && durationOverride > 0) {
+      seconds = durationOverride;
+    } else if (duration && duration > 0) {
+      seconds = duration;
+    } else if (durationSeconds && durationSeconds > 0) {
+      seconds = durationSeconds;
+    }
+
+    console.log('PlayerScreen: İçerik süresi hesaplandı:', {
       id: content.id,
       name: content.name || content.title,
-      duration_override: (content as any).duration_override,
-      duration: content.duration,
-      duration_seconds: content.duration_seconds,
-      hesaplanan: seconds
+      type: content.type,
+      duration_override: durationOverride,
+      duration: duration,
+      duration_seconds: durationSeconds,
+      hesaplanan_saniye: seconds,
+      hesaplanan_ms: seconds * 1000,
     });
 
     return seconds * 1000;
   };
 
-  // İndirme devam ediyorsa ilerleme çubuğu göster
+  const ensureOfflineCopies = useCallback(async (contents: any[], forceDownload = false) => {
+    for (const item of contents) {
+      const content = item.content || item;
+      const needsDownload = forceDownload || !content.local_path;
+      if (!needsDownload) continue;
+      try {
+        await DownloadManager.downloadContent(content);
+      } catch (err) {
+        console.log('PlayerScreen: İndirme hatası:', content?.name || content?.id, err);
+      }
+    }
+  }, []);
+
+  const formatTime = (seconds: number) => {
+    const s = Math.max(0, Math.floor(seconds));
+    const mm = String(Math.floor(s / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  };
+
+  // Video takılma izleme: ilerleme yoksa player'ı yeniden başlat
+  useEffect(() => {
+    if (!currentContent || currentContent.type !== 'video') return;
+
+    let stallCount = 0;
+    const maxStallCount = 3; // 3 kontrol sonrası yeniden başlat
+
+    const stallCheck = setInterval(() => {
+      const now = Date.now();
+      const idleMs = now - lastProgressAtRef.current;
+
+      // 10 saniyeden fazla ilerleme yoksa
+      if (idleMs > 10000 && lastProgressRef.current > 0) {
+        stallCount++;
+        console.log('PlayerScreen: Video takılma tespit edildi', {
+          idleMs,
+          stallCount,
+          position: lastProgressRef.current
+        });
+
+        if (stallCount >= maxStallCount) {
+          console.log('PlayerScreen: Video takıldı, yeniden başlatılıyor...');
+          stallCount = 0;
+          resumeAtRef.current = lastProgressRef.current;
+          setMediaInstanceKey(prev => prev + 1);
+          lastProgressAtRef.current = Date.now();
+        }
+      } else {
+        stallCount = 0; // İlerleme varsa sayacı sıfırla
+      }
+    }, 5000);
+
+    return () => clearInterval(stallCheck);
+  }, [currentContent?.id, currentContent?.type]);
+
   if (downloadStatus.isDownloading && downloadStatus.totalFiles > 0) {
     return (
       <View style={styles.container}>
@@ -607,6 +786,7 @@ const PlayerScreen = () => {
     );
   }
 
+
   return (
     <View style={styles.container}>
       <StatusBar hidden />
@@ -618,20 +798,109 @@ const PlayerScreen = () => {
         <Animated.View style={[styles.stage, { opacity: fadeAnim }]}>
           {currentContent.type === 'video' ? (
             <Video
+              key={`video-${currentContent.id}-${mediaInstanceKey}`}
               source={{ uri: getFileUri(currentContent) }}
               style={styles.media}
-              resizeMode="contain"
+              resizeMode="cover"
               repeat={false}
               paused={false}
-              onEnd={handleVideoEnd}
-              onError={handleVideoError}
+              useTextureView={false}
+              playInBackground={false}
+              playWhenInactive={false}
+              ignoreSilentSwitch="ignore"
+              progressUpdateInterval={500}
+              ref={videoRef}
+              onEnd={() => {
+                // Video gerçekten bitti mi kontrol et
+                const expectedDuration = videoDuration || getExpectedVideoDurationSec(currentContent);
+                const actualPlayed = lastProgressRef.current;
+
+                console.log('PlayerScreen: onEnd tetiklendi', {
+                  expectedDuration,
+                  actualPlayed,
+                  videoDuration,
+                  name: currentContent?.name
+                });
+
+                // Eğer beklenen sürenin %80'inden azı oynandıysa, video erken kesilmiş demektir
+                if (expectedDuration > 0 && actualPlayed < expectedDuration * 0.8) {
+                  console.log('PlayerScreen: Video erken kesildi! Yeniden başlatılıyor...');
+
+                  // Dosya bozuk olabilir, yeniden indir
+                  if (videoRestartCount < 2) {
+                    setVideoRestartCount(prev => prev + 1);
+                    resumeAtRef.current = actualPlayed;
+                    setMediaInstanceKey(prev => prev + 1);
+                    return;
+                  }
+                }
+
+                // Normal sonlandırma
+                handleVideoEnd();
+              }}
+              onError={(error: any) => {
+                console.log('PlayerScreen: Video HATA:', JSON.stringify(error));
+                console.log('PlayerScreen: Video URL:', getFileUri(currentContent));
+                handleVideoError(error);
+              }}
+              onLoad={(data: any) => {
+                const duration = data?.duration || 0;
+                console.log('PlayerScreen: Video yüklendi:', currentContent?.name, 'Süre:', duration, 'saniye');
+                setVideoDuration(duration);
+                setVideoRestartCount(0); // Başarılı yüklemede restart sayacını sıfırla
+
+                // Resume noktası varsa seek yap
+                if (resumeAtRef.current > 0 && resumeAtRef.current < duration) {
+                  const seekTo = resumeAtRef.current;
+                  resumeAtRef.current = 0;
+                  setTimeout(() => {
+                    videoRef.current?.seek(seekTo);
+                    console.log('PlayerScreen: Video seek yapıldı:', seekTo, 'saniye');
+                  }, 200);
+                }
+              }}
+              onProgress={(data: any) => {
+                const t = data?.currentTime || 0;
+                setVideoSeconds(t);
+                lastProgressRef.current = t;
+                lastProgressAtRef.current = Date.now();
+              }}
+              bufferConfig={{
+                minBufferMs: 15000,
+                maxBufferMs: 120000,
+                bufferForPlaybackMs: 2500,
+                bufferForPlaybackAfterRebufferMs: 5000,
+                cacheSizeMB: 100,
+              }}
+              onBuffer={({ isBuffering }: { isBuffering: boolean }) => {
+                if (isBuffering) {
+                  console.log('PlayerScreen: Video buffer yapıyor... Pozisyon:', lastProgressRef.current);
+                }
+              }}
+              onReadyForDisplay={() => {
+                console.log('PlayerScreen: Video görüntülenmeye hazır');
+              }}
+              onPlaybackRateChange={({ playbackRate }: { playbackRate: number }) => {
+                if (playbackRate === 0) {
+                  console.log('PlayerScreen: Video durdu/pause');
+                }
+              }}
             />
           ) : currentContent.type === 'image' ? (
             <Image
+              key={`image-${currentContent.id}-${mediaInstanceKey}`}
               source={{ uri: getFileUri(currentContent) }}
               style={styles.media}
-              resizeMode="contain"
-              onError={handleImageError}
+              resizeMode="cover"
+              resizeMethod="resize" // Android Image memory optimization
+              onError={(error: any) => {
+                console.log('PlayerScreen: Image HATA:', error?.nativeEvent?.error);
+                console.log('PlayerScreen: Image URL:', getFileUri(currentContent));
+                handleImageError(error);
+              }}
+              onLoad={() => {
+                console.log('PlayerScreen: Image BAŞARILI yüklendi:', currentContent?.name);
+              }}
             />
           ) : currentContent.type === 'ticker' ? (
             <View style={[styles.media, styles.tickerContainer]}>
@@ -655,6 +924,12 @@ const PlayerScreen = () => {
           )}
         </Animated.View>
       </TouchableOpacity>
+
+      {currentContent?.type === 'video' && (
+        <View style={styles.videoTimerContainer}>
+          <Text style={styles.videoTimerText}>{formatTime(videoSeconds)} / {formatTime(videoDuration)}</Text>
+        </View>
+      )}
 
       {showControls && (
         <TouchableOpacity
@@ -946,6 +1221,20 @@ const styles = StyleSheet.create({
     paddingVertical: scaleHeight(12),
     paddingHorizontal: scaleWidth(24),
     borderRadius: scaleWidth(8),
+  },
+  videoTimerContainer: {
+    position: 'absolute',
+    bottom: scaleHeight(20),
+    left: scaleWidth(20),
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingVertical: scaleHeight(6),
+    paddingHorizontal: scaleWidth(10),
+    borderRadius: scaleWidth(6),
+  },
+  videoTimerText: {
+    color: '#fff',
+    fontSize: scaleFont(16),
+    fontWeight: 'bold',
   },
 });
 

@@ -2,52 +2,96 @@ import ApiService from './ApiService';
 import StorageService from './StorageService';
 import DownloadManager from './DownloadManager';
 import { SYNC_CONFIG } from '@config/constants';
-import type { SyncStatus } from '@types/index';
+import type { SyncStatus, Playlist, Content } from '@types/index';
 
 /**
  * Sync Manager
- * Synchronization between server and local storage
+ * Yeni API ile senkronizasyon yönetimi
+ *
+ * Akış:
+ * 1. Heartbeat gönder -> sync_required kontrolü
+ * 2. sync_required ise -> syncPlaylist çağır
+ * 3. İçerikleri indir
+ * 4. Senkronizasyonu onayla (confirmSync)
  */
 class SyncManager {
   private syncInterval: NodeJS.Timeout | null = null;
   private isSyncing = false;
+  private currentVersion = 0;
+  private playlistVersion = 0;
 
   /**
-   * Start auto sync
+   * Auto sync başlat (heartbeat döngüsü)
    */
   startAutoSync(runImmediately = true): void {
     if (this.syncInterval) {
       return;
     }
 
-    console.log('Auto sync started');
-    this.syncInterval = setInterval(() => {
-      this.sync();
-    }, SYNC_CONFIG.INTERVAL);
+    console.log('[SyncManager] Auto sync başlatıldı');
 
-    // Initial sync
+    // Her 30 saniyede bir heartbeat gönder
+    this.syncInterval = setInterval(() => {
+      this.heartbeatAndSync();
+    }, 30000); // 30 saniye
+
+    // İlk senkronizasyon
     if (runImmediately) {
       this.sync();
     }
   }
 
   /**
-   * Stop auto sync
+   * Auto sync durdur
    */
   stopAutoSync(): void {
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
       this.syncInterval = null;
-      console.log('Auto sync stopped');
+      console.log('[SyncManager] Auto sync durduruldu');
     }
   }
 
   /**
-   * Manual sync
+   * Heartbeat gönder ve gerekirse senkronize et
+   */
+  async heartbeatAndSync(): Promise<void> {
+    try {
+      const heartbeatResponse = await ApiService.sendHeartbeat();
+
+      console.log('[SyncManager] Heartbeat:', {
+        sync_required: heartbeatResponse.sync_required,
+        server_version: heartbeatResponse.server_version,
+        device_version: heartbeatResponse.device_version,
+        pending_commands: heartbeatResponse.pending_commands?.length || 0,
+      });
+
+      // Bekleyen komutlar varsa işle
+      if (heartbeatResponse.pending_commands && heartbeatResponse.pending_commands.length > 0) {
+        try {
+          const CommandProcessor = require('./CommandProcessor').default;
+          await CommandProcessor.processPendingCommands(heartbeatResponse.pending_commands);
+        } catch (cmdError) {
+          console.warn('[SyncManager] Komut işleme hatası:', cmdError);
+        }
+      }
+
+      // Senkronizasyon gerekli mi?
+      if (heartbeatResponse.sync_required) {
+        console.log('[SyncManager] Senkronizasyon gerekli, başlatılıyor...');
+        await this.sync();
+      }
+    } catch (error: any) {
+      console.log('[SyncManager] Heartbeat hatası:', error?.message || error);
+    }
+  }
+
+  /**
+   * Manuel senkronizasyon
    */
   async sync(): Promise<SyncStatus> {
     if (this.isSyncing) {
-      console.log('Sync already in progress');
+      console.log('[SyncManager] Senkronizasyon zaten devam ediyor');
       const status = await StorageService.getSyncStatus();
       return status || this.getDefaultSyncStatus();
     }
@@ -56,109 +100,115 @@ class SyncManager {
     const startTime = Date.now();
 
     try {
-      console.log('Sync started');
+      console.log('[SyncManager] Senkronizasyon başladı');
 
-      // Check connection
+      // 1. Bağlantı kontrolü
       const isOnline = await ApiService.healthCheck();
       if (!isOnline) {
-        console.log('Offline mode - skipping sync');
+        console.log('[SyncManager] Çevrimdışı mod - senkronizasyon atlandı');
         return this.getDefaultSyncStatus();
       }
 
-      // Get device info
-      const deviceInfo = await StorageService.getDeviceInfo();
-      const deviceId = deviceInfo?.id;
-      console.log('Device ID:', deviceId);
+      // 2. Playlist'i al (sync/playlist endpoint'i)
+      let playlist: Playlist | null = null;
+      let contents: Content[] = [];
+      let syncVersion = 0;
 
-      // Send heartbeat (hata olsa bile devam et)
       try {
-        await ApiService.sendHeartbeat();
-      } catch (hbError: any) {
-        console.log('Heartbeat gönderilemedi (kritik değil):', hbError?.message || hbError);
-      }
+        const playlistData = await ApiService.syncPlaylist();
 
-      let playlists: any[] = [];
-      let contents: any[] = [];
+        // API yanıtını Playlist tipine dönüştür
+        playlist = ApiService.convertToPlaylist(playlistData);
+        syncVersion = playlistData.sync_version || 0;
 
-      // Cihaza atanmış playlist'i al
-      if (deviceId) {
+        // İçerikleri çıkar
+        if (playlist.contents && playlist.contents.length > 0) {
+          contents = playlist.contents.map((pc: any) => {
+            const content = pc.content || pc;
+            return {
+              ...content,
+              duration: pc.duration_override || content.duration || content.duration_seconds,
+            };
+          });
+        }
+
+        console.log(`[SyncManager] Playlist alındı: ${playlist.name}, ${contents.length} içerik`);
+
+        // Debug: içerik tiplerini logla
+        contents.forEach((c: any) => {
+          console.log(`[SyncManager] İçerik: ${c.name} (${c.type}), URL: ${c.file_url || c.url}`);
+        });
+
+      } catch (error: any) {
+        console.log('[SyncManager] Playlist alınamadı:', error?.message || error);
+
+        // Mevcut playlist'i kullanmayı dene
         try {
-          const devicePlaylist = await ApiService.getDevicePlaylist(deviceId);
-          if (devicePlaylist) {
-            playlists = [devicePlaylist];
-            // Playlist içeriklerini al
-            if (devicePlaylist.contents && devicePlaylist.contents.length > 0) {
-              contents = devicePlaylist.contents.map((pc: any) => pc.content || pc);
-              // Debug: ticker_text kontrolü
-              contents.forEach((c: any) => {
-                if (c.type === 'ticker') {
-                  console.log(`[SYNC] Ticker içerik ID:${c.id}, ticker_text:`, c.ticker_text ? c.ticker_text.substring(0, 50) : '(yok)');
-                }
-              });
-            }
-            console.log(`Cihaz playlist'i alındı: ${devicePlaylist.name}, ${contents.length} içerik`);
+          const currentPlaylistData = await ApiService.getCurrentPlaylist();
+          playlist = ApiService.convertToPlaylist(currentPlaylistData);
+
+          if (playlist.contents) {
+            contents = playlist.contents.map((pc: any) => pc.content || pc);
           }
-        } catch (error) {
-          console.log('Cihaz playlist alınamadı, genel playlist listesi çekiliyor...');
+        } catch {
+          console.log('[SyncManager] Mevcut playlist de alınamadı');
         }
       }
 
-      // Eğer cihaza özel playlist yoksa genel listeyi çek
-      if (playlists.length === 0) {
-        playlists = await ApiService.getPlaylists();
-        contents = await ApiService.getContents();
+      // 3. Storage'a kaydet
+      if (playlist) {
+        await StorageService.savePlaylists([playlist]);
       }
 
-      await StorageService.savePlaylists(playlists);
-      await StorageService.saveContents(contents);
-
-      // Fetch schedules (cihaz bazlı) - hata olsa bile devam et
-      let schedules: any[] = [];
-      try {
-        schedules = await ApiService.getActiveSchedules(deviceId);
-        await StorageService.saveSchedules(schedules);
-      } catch (scheduleError: any) {
-        console.log('Schedule alınamadı (kritik değil):', scheduleError?.message || scheduleError);
+      if (contents.length > 0) {
+        await StorageService.saveContents(contents);
       }
 
-      // Download new content files
-      const pendingDownloads = contents.filter((c: any) => (c.file_url || c.url) && !c.local_path);
+      // 4. İçerikleri indir
+      const pendingDownloads = contents.filter((c: any) => {
+        const url = c.file_url || c.url;
+        return url && !c.local_path;
+      });
+
       if (pendingDownloads.length > 0) {
-        console.log(`Downloading ${pendingDownloads.length} files...`);
+        console.log(`[SyncManager] ${pendingDownloads.length} dosya indiriliyor...`);
         try {
           await DownloadManager.downloadPlaylistContents(pendingDownloads);
         } catch (downloadError: any) {
-          console.log('Download hatası (kritik değil):', downloadError?.message || downloadError);
+          console.log('[SyncManager] İndirme hatası (kritik değil):', downloadError?.message);
         }
       }
 
-      // Process offline queue
-      try {
-        await this.processOfflineQueue();
-      } catch (queueError) {
-        // Kritik değil
+      // 5. Senkronizasyonu onayla
+      if (playlist && syncVersion > 0) {
+        try {
+          const confirmResult = await ApiService.confirmSync(syncVersion, playlist.id);
+          console.log('[SyncManager] Senkronizasyon onaylandı:', confirmResult.synced_at);
+          this.currentVersion = confirmResult.confirmed_version;
+        } catch (confirmError: any) {
+          console.log('[SyncManager] Onay hatası (kritik değil):', confirmError?.message);
+        }
       }
 
-      // Save sync status
+      // 6. Sync status kaydet
       const syncStatus: SyncStatus = {
         last_sync_at: new Date().toISOString(),
         is_syncing: false,
-        playlists_count: playlists.length,
+        playlists_count: playlist ? 1 : 0,
         contents_count: contents.length,
-        schedules_count: schedules.length,
+        schedules_count: 0,
         pending_downloads: DownloadManager.getAllProgress().filter(p => p.status !== 'completed').length,
       };
 
       await StorageService.saveSyncStatus(syncStatus);
 
       const duration = Date.now() - startTime;
-      console.log(`Sync completed in ${duration}ms`);
+      console.log(`[SyncManager] Senkronizasyon tamamlandı (${duration}ms)`);
 
       return syncStatus;
-    } catch (error: any) {
-      console.error('Sync failed:', error);
 
-      // Return last known status
+    } catch (error: any) {
+      console.error('[SyncManager] Senkronizasyon hatası:', error);
       const status = await StorageService.getSyncStatus();
       return status || this.getDefaultSyncStatus();
     } finally {
@@ -166,38 +216,15 @@ class SyncManager {
     }
   }
 
-  /**
-   * Process offline queue
-   */
-  private async processOfflineQueue(): Promise<void> {
-    const queue = await StorageService.getOfflineQueue();
-    if (queue.length === 0) return;
-
-    console.log(`Processing ${queue.length} offline actions`);
-
-    for (const action of queue) {
-      try {
-        // Process based on action type
-        if (action.type === 'log') {
-          await ApiService.sendLog(action.data);
-        }
-        // Add more action types as needed
-      } catch (error) {
-        console.error('Failed to process offline action:', error);
-      }
-    }
-
-    // Clear queue after processing
-    await StorageService.clearOfflineQueue();
-  }
 
   /**
-   * Get sync status
+   * Senkronizasyon durumunu getir
    */
   async getSyncStatus(): Promise<SyncStatus> {
     const status = await StorageService.getSyncStatus();
     return status || this.getDefaultSyncStatus();
   }
+
 
   private getDefaultSyncStatus(): SyncStatus {
     return {
@@ -211,3 +238,4 @@ class SyncManager {
 }
 
 export default new SyncManager();
+

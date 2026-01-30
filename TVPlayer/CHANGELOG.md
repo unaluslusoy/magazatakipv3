@@ -1,165 +1,101 @@
-# Changelog
+# Değişiklik Geçmişi
 
-## v1.0.7 (2026-01-06)
+## v1.1.1 (29 Ocak 2026)
 
-### 🖥️ Uzaktan Ekran Kontrolü (Admin Panel)
+### 🚀 Performans İyileştirmeleri
 
-#### Yeni Dosyalar
-- **ScreenShareService.kt**: Ekran yakalama ve backend'e frame gönderme
-- **ScreenCaptureActivity.kt**: MediaProjection izni alma
-- **ScreenShareModule.kt**: React Native native modül
-- **ScreenSharePackage.kt**: RN package tanımı
-- **ScreenShareService.ts**: TypeScript wrapper
+- ✅ **Hardware Acceleration**: Donanım hızlandırma etkinleştirildi (`hardwareAccelerated="true"`)
+- ✅ **Memory Management**: `largeHeap="true"` ile büyük bellek alanı kullanımı açıldı
+- ✅ **Video Optimize**: `TextureView` yerine daha performanslı olan `SurfaceView` kullanımına geçildi
+- ✅ **Image Optimize**: Görsel yüklemelerinde `resizeMethod="resize"` kullanılarak bellek kullanımı düşürüldü
+- ✅ **Buffer Ayarları**: Video oynatma başlangıç süreleri iyileştirildi (Buffer süreleri optimize edildi)
 
-#### Özellikler
-- Admin panelden cihaz ekranını canlı izleme
-- WebSocket üzerinden frame streaming (2 FPS, ~50KB/frame)
-- MediaProjection API ile ekran yakalama
-- Kullanıcı izni bir kez alınır (ilk kurulumda)
-- Socket komutları: `screen:start`, `screen:stop`
+### 🔧 Diğer
 
-#### Konfigürasyon
-- Frame interval: 500ms (2 FPS)
-- JPEG kalitesi: 50%
-- Çözünürlük: Yarı HD (0.5x scale)
-- Bant genişliği: ~0.5-0.8 Mbps
-
-### 📋 Backend Gereksinimleri
-- `POST /api/devices/screen-frame` endpoint'i
-- Socket.io `screen:start`, `screen:stop` event handler'ları
-- Socket.io `screen:frame` event emitter (admin panele)
-- Detaylı dokümantasyon: `docs/SCREEN_SHARE_API.md`
+- ✅ Cihaz USB yükleme sorunları için `AndroidManifest.xml` optimizasyonları yapıldı.
 
 ---
 
-## v1.0.6 (2026-01-06)
+## v1.1.0 (29 Ocak 2026)
 
-### 🎯 Kiosk Modu İyileştirmeleri (Android 9+)
+### 🎉 Yeni Özellikler
 
-#### MainActivity.kt
-- **FLAG_KEEP_SCREEN_ON**: Ekran asla kapanmaz - dijital tabela için zorunlu
-- **onResume()**: Başka uygulamadan dönüldüğünde sistem UI'ı otomatik gizlenir
-- **onWindowFocusChanged()**: Focus değişimlerinde UI yeniden gizlenir
-- **Android 11+ WindowInsetsController**: Yeni API ile tam ekran modu
-- **Android 9-10 IMMERSIVE_STICKY**: Eski API ile sticky immersive mod
-- **setDecorFitsSystemWindows(false)**: Android 11+ layout padding sorunu çözüldü
-- **setOnSystemUiVisibilityChangeListener**: Özel ROM'lar için UI değişiklik dinleyicisi
+#### Komut Sistemi
+- ✅ Panel'den uzaktan komut alma sistemi eklendi
+- ✅ Desteklenen komutlar:
+  - `REFRESH_CONTENT` - İçeriği yenile
+  - `RESTART_APP` - Uygulamayı yeniden başlat
+  - `SYNC_NOW` - Şimdi senkronize et
+  - `CLEAR_CACHE` - Önbelleği temizle
+  - `TAKE_SCREENSHOT` - Ekran görüntüsü al
+  - `UPDATE_SETTINGS` - Ayarları güncelle
+  - `REBOOT_DEVICE` - Cihazı yeniden başlat (root/system app gerekli)
+- ✅ Komut sonuçları sunucuya raporlanıyor
 
-#### Manifest
-- **launchMode: singleTask**: Çoklu instance engellendi
-- **configChanges genişletildi**: Rotation/config değişiminde reload yok
-- **resizeableActivity: false**: Split screen engellendi
+#### Screenshot Sistemi
+- ✅ Uzaktan ekran görüntüsü alma
+- ✅ Screenshot'lar otomatik sunucuya yükleniyor
+- ✅ Base64 formatında upload
 
-#### Theme (styles.xml)
-- **windowFullscreen: true**: Baştan tam ekran
-- **windowLayoutInDisplayCutoutMode: shortEdges**: Notch desteği
-- **Transparan status/navigation bar**: Boşluk kalmaz
+#### Gelişmiş Heartbeat
+- ✅ IP adresi bilgisi eklendi
+- ✅ MAC adresi bilgisi eklendi
+- ✅ Heartbeat response'unda pending_commands kontrolü
+- ✅ Otomatik komut işleme
 
-#### Kiosk Güvenlik
-- **onBackPressed() engellendi**: Yanlışlıkla çıkış yok
-- **7 kez hızlı tıklama**: Admin çıkış mekanizması
-- **Toast bildirimler**: 3+ tıklamada kalan sayı gösterilir
-
-### 🔧 Build Ayarları
-- **targetSdkVersion: 34**: Google Play Store uyumlu
-- **minSdkVersion: 28**: Android 9 (Pie) ve üstü
-
----
-
-## v1.0.5 (2026-01-06)
-
-### 🎯 Yeni Özellikler
-- **Ticker İyileştirmeleri**: Kayan yazı animasyonu daha yumuşak ve okunaklı
-- **API İyileştirmeleri**: Playlist alırken `include=contents` ile tüm içerik detayları
-- **ticker_text Desteği**: Backend'den gelen ticker_text alanı doğru gösteriliyor
+#### Cihaz Bilgileri
+- ✅ Detaylı cihaz bilgisi toplama
+- ✅ Network bilgileri (IP, MAC, WiFi SSID, sinyal gücü)
+- ✅ Depolama bilgileri (toplam, boş, kullanılan)
+- ✅ Batarya durumu
 
 ### 🔧 İyileştirmeler
-- Ticker font boyutu ve stil optimizasyonu
-- Ticker container arka plan rengi iyileştirildi
-- HTML etiketleri temizleme geliştirmeleri
-- Debug loglama eklendi (ticker_text kontrolü için)
 
-### 🐛 Hata Düzeltmeleri
-- Ticker yazı kesilmesi sorunu giderildi
-- Animasyon döngüsü düzeltildi
-- API yanıt formatı uyumluluğu
+- ✅ API endpoint'leri yeni backend'e uyarlandı
+- ✅ URL path'lerde `uploads/` prefix'i eklendi
+- ✅ Video ve görseller tam ekran (cover) olarak gösteriliyor
+- ✅ Komut listener'ları PlayerScreen'e eklendi
+- ✅ SyncManager heartbeat'te komutları işliyor
 
----
+### 📚 Dokümantasyon
 
-## v1.2.0 (2026-01-05)
-
-### 🎯 Yeni Özellikler
-- **İndirme İlerleme Çubuğu**: İçerikler indirilirken görsel ilerleme göstergesi
-- **Önbellek Desteği**: İndirilen içerikler cihazda saklanıyor, tekrar indirilmiyor
-- **Offline Oynatma**: İndirilen içerikler internet olmadan da oynatılabiliyor
-- **Menü Kapat Butonu**: Sağ üstte "✕ Kapat" butonu eklendi
-- **Android 9+ Desteği**: minSdkVersion 28'e düşürüldü (Android Pie ve üstü)
-
-### 🔧 İyileştirmeler
-- Menü arka planına dokunarak kapatılabiliyor
-- Back tuşu ile menü kapatılabiliyor
-- Dosya adı oluşturma hatası düzeltildi (URL parse sorunu)
-- Release APK imzalama düzeltildi
-- TV remote talimatları güncellendi
-
-### 🐛 Hata Düzeltmeleri
-- `ENOENT: no such file or directory` hatası düzeltildi
-- Önbellek senkronizasyonu eklendi
-- Content type'a göre doğru dosya uzantısı belirleniyor
-
-### 📦 Build
-- Release keystore oluşturuldu
-- APK Signature Scheme v3 ile imzalanıyor
-- minifyEnabled kapatıldı (stabilite için)
+- ✅ Android TV Geliştirme Rehberi eklendi
+- ✅ Heartbeat mekanizması dökümante edildi
+- ✅ Komut sistemi dökümante edildi
+- ✅ Screenshot upload dökümante edildi
 
 ---
 
-## v1.1.0 (2026-01-05)
+## v1.0.10 (29 Ocak 2026)
 
-### 🎯 Yeni Özellikler
-- **Android TV Kumanda Desteği**: D-pad ve uzaktan kumanda ile tam kontrol
-  - ◀ Sol: Önceki içerik
-  - ▶ Sağ: Sonraki içerik
-  - ▲ Yukarı: Senkronize et
-  - ▼ Aşağı: Kontrolleri göster/gizle
-  - OK/Select: Kontrolleri göster/gizle
-  - Menu: Ayarlar ekranı
-  - Back: Kontrolleri gizle
+### 🔧 Düzeltmeler
 
-- **Dikey Mod (Portrait)**: TV ve tabletler için 9:16 dikey konumlandırma
-- **Yumuşak Geçiş Efekti**: İçerikler arası fade in/out animasyonu
-- **Ticker İçerik Desteği**: Kayan yazı tipinde içerikler gösteriliyor
-
-### 🔒 Kiosk Modu İyileştirmeleri
-- Ekran sürekli açık kalıyor (WakeLock)
-- Uyku moduna geçmiyor
-- Kilit ekranına düşmüyor
-- Cihaz yeniden başlatıldığında otomatik açılıyor
-
-### 🔧 API İyileştirmeleri
-- Cihaza atanmış playlist otomatik çekiliyor (`GET /api/devices/{id}`)
-- Schedule endpoint hata toleransı artırıldı
-- Socket bağlantı hatası logları azaltıldı
-- Farklı API response formatları destekleniyor
-
-### 🐛 Hata Düzeltmeleri
-- "İçerik bulunamadı" hatası düzeltildi
-- Contents format uyumsuzluğu giderildi (content.title, content.url desteği)
-- Auto-advance tüm içerik tipleri için çalışıyor (image, video, ticker)
-- Socket error spam logları kaldırıldı
-
-### 📱 UI İyileştirmeleri
-- TV için büyük kontrol butonları
-- Mavi/turuncu renk şeması
-- Uzaktan kumanda talimatları ekranda gösteriliyor
-- Daha büyük font boyutları (ticker: 48px, template: 56px)
+- ✅ API `/playlists/current` 500 hatası için workaround eklendi
+- ✅ URL path düzeltmeleri yapıldı
 
 ---
 
-## v1.0.1 (2025-12-30)
-- Uygulama adı: **Mağaza Pano**
-- Android TV/Box desteği: `LEANBACK_LAUNCHER`
-- Boot sonrası otomatik başlatma için Foreground Service yaklaşımı (`BootUpReceiver` + `KioskService`)
-- Login ekranında 429 (çok deneme) geri sayım ve daha anlaşılır Türkçe uyarılar
-- UTF-8 Türkçe karakter uyumu için `.editorconfig`
+## v1.0.9 (29 Ocak 2026)
+
+### 🔧 Düzeltmeler
+
+- ✅ Video ve görsel URL'leri düzeltildi
+- ✅ Backslash escape karakterleri temizlendi
+
+---
+
+## v1.0.0 (28 Ocak 2026)
+
+### 🎉 İlk Sürüm
+
+- ✅ Video ve görsel içerik oynatma
+- ✅ Ticker (kayan yazı) desteği
+- ✅ Playlist yönetimi
+- ✅ Schedule (zamanlama) desteği
+- ✅ Offline mode
+- ✅ İçerik indirme ve önbellekleme
+- ✅ Otomatik senkronizasyon
+- ✅ Android TV uzaktan kumanda desteği
+- ✅ Heartbeat sistemi
+- ✅ Log sistemi
 

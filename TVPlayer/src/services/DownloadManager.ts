@@ -67,18 +67,25 @@ class DownloadManager {
   }
 
   async initialize(): Promise<void> {
-    // Create cache directory
-    const exists = await RNFS.exists(this.cachePath);
-    if (!exists) {
-      await RNFS.mkdir(this.cachePath);
-      console.log('Önbellek dizini oluşturuldu:', this.cachePath);
+    try {
+      // Create cache directory
+      const exists = await RNFS.exists(this.cachePath);
+      if (!exists) {
+        await RNFS.mkdir(this.cachePath);
+        console.log('Önbellek dizini oluşturuldu:', this.cachePath);
+      } else {
+        console.log('Önbellek dizini mevcut:', this.cachePath);
+      }
+
+      // Önbellekteki dosyaları kontrol et ve Storage'ı güncelle
+      await this.syncCacheWithStorage();
+
+      // Clean old cache (30 günden eski dosyaları sil)
+      await this.cleanCache();
+    } catch (error) {
+      console.error('DownloadManager başlatma hatası:', error);
+      // Hata olsa bile devam et
     }
-
-    // Önbellekteki dosyaları kontrol et ve Storage'ı güncelle
-    await this.syncCacheWithStorage();
-
-    // Clean old cache (30 günden eski dosyaları sil)
-    await this.cleanCache();
   }
 
   /**
@@ -125,17 +132,41 @@ class DownloadManager {
       throw new Error('Content has no file URL');
     }
 
+    // Cache dizininin var olduğundan emin ol
+    try {
+      const cacheExists = await RNFS.exists(this.cachePath);
+      if (!cacheExists) {
+        await RNFS.mkdir(this.cachePath);
+        console.log('Cache dizini oluşturuldu:', this.cachePath);
+      }
+    } catch (mkdirError) {
+      console.error('Cache dizini oluşturulamadı:', mkdirError);
+    }
+
     const fileName = this.getFileName(content);
     const localPath = `${this.cachePath}/${fileName}`;
+    const expectedSize = Number((content as any).file_size || 0);
 
     // Önce önbellekte var mı kontrol et
     try {
       const cacheExists = await RNFS.exists(localPath);
       if (cacheExists) {
-        console.log('Önbellekten yükleniyor:', fileName);
-        // Storage'ı güncelle
-        await StorageService.updateContentLocalPath(content.id, localPath);
-        return localPath;
+        if (expectedSize > 0) {
+          const stat = await RNFS.stat(localPath);
+          const actualSize = Number(stat.size || 0);
+          if (actualSize + 1024 < expectedSize) {
+            console.log('Önbellek dosyası eksik, yeniden indirilecek:', { expectedSize, actualSize, fileName });
+            await RNFS.unlink(localPath);
+          } else {
+            console.log('Önbellekten yükleniyor:', fileName);
+            await StorageService.updateContentLocalPath(content.id, localPath);
+            return localPath;
+          }
+        } else {
+          console.log('Önbellekten yükleniyor:', fileName);
+          await StorageService.updateContentLocalPath(content.id, localPath);
+          return localPath;
+        }
       }
     } catch (e) {
       // Önbellek kontrolü başarısız, indirmeye devam et
@@ -143,10 +174,26 @@ class DownloadManager {
 
     // Check if already downloaded (local_path varsa)
     if (content.local_path) {
-      const exists = await RNFS.exists(content.local_path);
-      if (exists) {
-        console.log('Zaten indirilmiş:', content.local_path);
-        return content.local_path;
+      try {
+        const exists = await RNFS.exists(content.local_path);
+        if (exists) {
+          if (expectedSize > 0) {
+            const stat = await RNFS.stat(content.local_path);
+            const actualSize = Number(stat.size || 0);
+            if (actualSize + 1024 < expectedSize) {
+              console.log('Local dosya eksik, yeniden indirilecek:', { expectedSize, actualSize, fileName });
+              await RNFS.unlink(content.local_path);
+            } else {
+              console.log('Zaten indirilmiş:', content.local_path);
+              return content.local_path;
+            }
+          } else {
+            console.log('Zaten indirilmiş:', content.local_path);
+            return content.local_path;
+          }
+        }
+      } catch (e) {
+        // Dosya kontrolü başarısız, indirmeye devam et
       }
     }
 
@@ -165,15 +212,15 @@ class DownloadManager {
     // Add to queue
     this.downloadQueue.set(content.id, {
       content_id: content.id,
-      file_url: content.file_url,
+      file_url: fileUrl,
       progress: 0,
       status: 'pending',
     });
 
-    return this.processDownload(content, localPath);
+    return this.processDownload(content, localPath, fileUrl);
   }
 
-  private async processDownload(content: Content, localPath: string): Promise<string> {
+  private async processDownload(content: Content, localPath: string, fromUrl: string, retryCount = 0): Promise<string> {
     // Wait for available slot
     while (this.activeDownloads >= this.maxConcurrentDownloads) {
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -184,23 +231,63 @@ class DownloadManager {
     progress.status = 'downloading';
 
     const fileName = content.title || content.name || `Dosya ${content.id}`;
+    let expectedFromDownload = 0;
+    const maxRetries = 3;
 
     try {
-      await RNFS.downloadFile({
-        fromUrl: content.file_url!,
+      console.log(`[DownloadManager] İndirme başlıyor: ${fileName} (deneme ${retryCount + 1}/${maxRetries})`);
+
+      const downloadResult = await RNFS.downloadFile({
+        fromUrl,
         toFile: localPath,
-        progressDivider: 10,
-        begin: () => {
-          console.log('İndirme başladı:', fileName);
+        progressDivider: 5,
+        connectionTimeout: 30000,
+        readTimeout: 60000,
+        begin: (res) => {
+          expectedFromDownload = res.contentLength || 0;
+          console.log(`[DownloadManager] ${fileName}: ${Math.round(expectedFromDownload / 1024)} KB`);
           this.currentFileName = fileName;
           this.notifyProgress();
         },
         progress: res => {
-          const percent = (res.bytesWritten / res.contentLength) * 100;
+          if (res.contentLength > 0) {
+            expectedFromDownload = res.contentLength;
+          }
+          const percent = res.contentLength > 0
+            ? (res.bytesWritten / res.contentLength) * 100
+            : 0;
           progress.progress = percent;
           this.downloadQueue.set(content.id, progress);
         },
       }).promise;
+
+      // İndirme sonucu kontrolü
+      if (downloadResult.statusCode !== 200) {
+        throw new Error(`HTTP ${downloadResult.statusCode}`);
+      }
+
+      // Dosya boyut doğrulaması
+      const stat = await RNFS.stat(localPath);
+      const actualSize = Number(stat.size || 0);
+      const expectedSize = Number((content as any).file_size || 0) || expectedFromDownload;
+
+      console.log(`[DownloadManager] ${fileName}: indirilen=${actualSize}, beklenen=${expectedSize}`);
+
+      // Dosya çok küçükse veya beklenen boyutun %90'ından azsa hatalı
+      if (actualSize < 1000) {
+        throw new Error('Dosya çok küçük, indirme başarısız');
+      }
+
+      if (expectedSize > 0 && actualSize < expectedSize * 0.9) {
+        console.log(`[DownloadManager] ${fileName}: Eksik indirme tespit edildi`);
+        await RNFS.unlink(localPath).catch(() => {});
+
+        if (retryCount < maxRetries - 1) {
+          this.activeDownloads--;
+          return this.processDownload(content, localPath, fromUrl, retryCount + 1);
+        }
+        throw new Error('İndirme tamamlanamadı (boyut uyuşmuyor)');
+      }
 
       // Update storage
       await StorageService.updateContentLocalPath(content.id, localPath);
@@ -209,9 +296,20 @@ class DownloadManager {
       progress.local_path = localPath;
       progress.progress = 100;
 
-      console.log('Download completed:', content.title);
+      console.log(`[DownloadManager] ✓ ${fileName} tamamlandı (${Math.round(actualSize / 1024)} KB)`);
       return localPath;
+
     } catch (error: any) {
+      console.error(`[DownloadManager] ✗ ${fileName} hatası:`, error?.message || error);
+
+      // Yeniden dene
+      if (retryCount < maxRetries - 1) {
+        console.log(`[DownloadManager] ${fileName}: Yeniden deneniyor...`);
+        this.activeDownloads--;
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 saniye bekle
+        return this.processDownload(content, localPath, fromUrl, retryCount + 1);
+      }
+
       progress.status = 'failed';
       progress.error = error.message;
       throw error;
@@ -376,6 +474,7 @@ class DownloadManager {
       }
     } catch (e) {
       // URL parse hatası, content type'a göre uzantı belirle
+      console.log('URL parse hatası, content type kullanılıyor:', content.type);
     }
 
     // Content type'a göre varsayılan uzantı
@@ -392,8 +491,30 @@ class DownloadManager {
       }
     }
 
-    // Tutarlı dosya adı (content.id ile)
+    // Tutarlı dosya adı (content.id ile) - alt klasör yok, düz dosya
     return `content_${content.id}.${ext}`;
+  }
+
+  async forceDownloadContent(content: Content): Promise<string> {
+    const fileName = this.getFileName(content);
+    const localPath = `${this.cachePath}/${fileName}`;
+
+    try {
+      const exists = await RNFS.exists(localPath);
+      if (exists) {
+        await RNFS.unlink(localPath);
+      }
+    } catch {
+      // ignore delete errors
+    }
+
+    try {
+      await StorageService.updateContentLocalPath(content.id, '');
+    } catch {
+      // ignore storage errors
+    }
+
+    return this.downloadContent({ ...content, local_path: undefined });
   }
 }
 

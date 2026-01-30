@@ -109,6 +109,22 @@ const LoginScreen = () => {
       await StorageService.saveDeviceInfo(authToken.device);
       await StorageService.saveDeviceCode(deviceCode.trim());
 
+      // Cihaz bilgilerini sunucuya gönder
+      try {
+        const DeviceInfoService = require('@services/DeviceInfoService').default;
+        const deviceInfo = await DeviceInfoService.getHeartbeatInfo();
+        await ApiService.updateDeviceInfo({
+          app_version: deviceInfo.app_version || APP_CONFIG.VERSION,
+          os_version: deviceInfo.os_version || 'Android',
+          screen_resolution: deviceInfo.screen_resolution || '1920x1080',
+          free_storage_mb: deviceInfo.free_storage_mb || 0,
+          ip_address: deviceInfo.ip_address || 'unknown',
+        });
+        console.log('[LoginScreen] Cihaz bilgileri güncellendi');
+      } catch (updateError) {
+        console.log('[LoginScreen] Cihaz bilgileri güncellenemedi (kritik değil)');
+      }
+
       await SyncManager.sync();
 
       SyncManager.startAutoSync(false);
