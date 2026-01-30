@@ -1,5 +1,41 @@
 # Değişiklik Geçmişi
 
+## v1.2.0 (30 Ocak 2026)
+
+### 🎬 Video Oynatma Sorunları Çözüldü
+
+- ✅ **Video Erken Kesilme Sorunu**: Uzun videoların 32. saniyede kesilmesi sorunu kalıcı olarak çözüldü
+- ✅ **Buffer Optimizasyonu**: Video buffer ayarları artırıldı (15s min, 120s max buffer)
+- ✅ **Akıllı onEnd Kontrolü**: Video gerçekten bitip bitmediği kontrol ediliyor (%80 kuralı)
+- ✅ **Otomatik Yeniden Başlatma**: Video takılırsa otomatik olarak kaldığı yerden devam ediyor
+- ✅ **Cache Desteği**: 100MB video cache ile daha akıcı oynatma
+
+### 📥 İndirme Sistemi İyileştirmeleri
+
+- ✅ **3 Deneme Mekanizması**: Başarısız indirmeler 3 kez yeniden deneniyor
+- ✅ **Boyut Doğrulaması**: İndirilen dosyaların tam olup olmadığı kontrol ediliyor
+- ✅ **Detaylı Loglama**: İndirme süreçleri artık daha anlaşılır şekilde loglanıyor
+
+### 🧹 Kod Temizliği
+
+- ✅ Kullanılmayan `zustand` bağımlılığı kaldırıldı
+- ✅ SyncManager'dan kullanılmayan fonksiyonlar temizlendi (`checkForUpdates`, `syncDelta`, `getServerSyncStatus`)
+- ✅ Performans için gereksiz kodlar optimize edildi
+
+### 📱 Android İyileştirmeleri
+
+- ✅ `vmSafeMode="false"` - JIT derleme için performans artışı
+- ✅ `requestLegacyExternalStorage="true"` - Android 10 depolama uyumluluğu
+- ✅ Android 9+ (minSdk=28) desteği korundu
+
+### 🔧 Korunan Özellikler
+
+- ✅ ScreenShare (ekran paylaşımı)
+- ✅ Socket komutları (uzaktan kontrol)
+- ✅ Schedule (zamanlama) sistemi
+
+---
+
 ## v1.1.1 (29 Ocak 2026)
 
 ### 🚀 Performans İyileştirmeleri
