@@ -811,139 +811,104 @@ const PlayerScreen = () => {
     <View style={styles.container}>
       <StatusBar hidden />
 
-      <TouchableOpacity
-        style={styles.touchArea}
-        activeOpacity={1}
-        onPress={toggleControls}>
+      <View style={styles.touchArea}>
         <Animated.View style={[styles.stage, { opacity: fadeAnim }]}>
           {currentContent.type === 'video' ? (
-            <Video
-              key={`video-${currentContent.id}-${mediaInstanceKey}`}
-              source={{ uri: getFileUri(currentContent) }}
-              style={styles.media}
-              resizeMode="cover"
-              repeat={false}
-              paused={false}
-              useTextureView={false}
-              playInBackground={false}
-              playWhenInactive={false}
-              ignoreSilentSwitch="ignore"
-              progressUpdateInterval={500}
-              ref={videoRef}
-              onEnd={() => {
-                // Video gerçekten bitti mi kontrol et
-                const expectedDuration = videoDuration || getExpectedVideoDurationSec(currentContent);
-                const actualPlayed = lastProgressRef.current;
-
-                console.log('PlayerScreen: onEnd tetiklendi', {
-                  expectedDuration,
-                  actualPlayed,
-                  videoDuration,
-                  name: currentContent?.name
-                });
-
-                // Eğer beklenen sürenin %80'inden azı oynandıysa, video erken kesilmiş demektir
-                if (expectedDuration > 0 && actualPlayed < expectedDuration * 0.8) {
-                  console.log('PlayerScreen: Video erken kesildi! Yeniden başlatılıyor...');
-
-                  // Dosya bozuk olabilir, yeniden indir
-                  if (videoRestartCount < 2) {
-                    setVideoRestartCount(prev => prev + 1);
-                    resumeAtRef.current = actualPlayed;
-                    setMediaInstanceKey(prev => prev + 1);
-                    return;
+            <>
+              <Video
+                key={`video-${currentContent.id}-${mediaInstanceKey}`}
+                source={{ uri: getFileUri(currentContent) }}
+                style={styles.media}
+                resizeMode="cover"
+                repeat={false}
+                paused={false}
+                useTextureView={true}
+                playInBackground={false}
+                playWhenInactive={false}
+                ignoreSilentSwitch="ignore"
+                progressUpdateInterval={1000}
+                ref={videoRef}
+                onEnd={() => {
+                  console.log('[Video] onEnd - Süre:', lastProgressRef.current);
+                  handleVideoEnd();
+                }}
+                onError={(error: any) => {
+                  console.log('[Video] Hata:', error?.error?.errorString || JSON.stringify(error));
+                  handleVideoError(error);
+                }}
+                onLoad={(data: any) => {
+                  const duration = data?.duration || 0;
+                  console.log('[Video] Yüklendi:', currentContent?.name, 'Süre:', Math.round(duration), 's');
+                  setVideoDuration(duration);
+                  setVideoRestartCount(0);
+                  lastProgressRef.current = 0;
+                  lastProgressAtRef.current = Date.now();
+                }}
+                onProgress={(data: any) => {
+                  const t = data?.currentTime || 0;
+                  setVideoSeconds(t);
+                  lastProgressRef.current = t;
+                  lastProgressAtRef.current = Date.now();
+                }}
+                onBuffer={({ isBuffering }: { isBuffering: boolean }) => {
+                  if (isBuffering && lastProgressRef.current > 0) {
+                    console.log('[Video] Buffering @', Math.round(lastProgressRef.current), 's');
                   }
-                }
-
-                // Normal sonlandırma
-                handleVideoEnd();
-              }}
-              onError={(error: any) => {
-                console.log('PlayerScreen: Video HATA:', JSON.stringify(error));
-                console.log('PlayerScreen: Video URL:', getFileUri(currentContent));
-                handleVideoError(error);
-              }}
-              onLoad={(data: any) => {
-                const duration = data?.duration || 0;
-                console.log('PlayerScreen: Video yüklendi:', currentContent?.name, 'Süre:', duration, 'saniye');
-                setVideoDuration(duration);
-                setVideoRestartCount(0); // Başarılı yüklemede restart sayacını sıfırla
-
-                // Resume noktası varsa seek yap
-                if (resumeAtRef.current > 0 && resumeAtRef.current < duration) {
-                  const seekTo = resumeAtRef.current;
-                  resumeAtRef.current = 0;
-                  setTimeout(() => {
-                    videoRef.current?.seek(seekTo);
-                    console.log('PlayerScreen: Video seek yapıldı:', seekTo, 'saniye');
-                  }, 200);
-                }
-              }}
-              onProgress={(data: any) => {
-                const t = data?.currentTime || 0;
-                setVideoSeconds(t);
-                lastProgressRef.current = t;
-                lastProgressAtRef.current = Date.now();
-              }}
-              bufferConfig={{
-                minBufferMs: 15000,
-                maxBufferMs: 120000,
-                bufferForPlaybackMs: 2500,
-                bufferForPlaybackAfterRebufferMs: 5000,
-                cacheSizeMB: 100,
-              }}
-              onBuffer={({ isBuffering }: { isBuffering: boolean }) => {
-                if (isBuffering) {
-                  console.log('PlayerScreen: Video buffer yapıyor... Pozisyon:', lastProgressRef.current);
-                }
-              }}
-              onReadyForDisplay={() => {
-                console.log('PlayerScreen: Video görüntülenmeye hazır');
-              }}
-              onPlaybackRateChange={({ playbackRate }: { playbackRate: number }) => {
-                if (playbackRate === 0) {
-                  console.log('PlayerScreen: Video durdu/pause');
-                }
-              }}
-            />
+                }}
+              />
+              {/* Video üzerine dokunma alanı */}
+              <TouchableOpacity
+                style={styles.videoTouchOverlay}
+                activeOpacity={1}
+                onPress={toggleControls}
+              />
+            </>
           ) : currentContent.type === 'image' ? (
-            <Image
-              key={`image-${currentContent.id}-${mediaInstanceKey}`}
-              source={{ uri: getFileUri(currentContent) }}
+            <TouchableOpacity
               style={styles.media}
-              resizeMode="cover"
-              resizeMethod="resize" // Android Image memory optimization
-              onError={(error: any) => {
-                console.log('PlayerScreen: Image HATA:', error?.nativeEvent?.error);
-                console.log('PlayerScreen: Image URL:', getFileUri(currentContent));
-                handleImageError(error);
-              }}
-              onLoad={() => {
-                console.log('PlayerScreen: Image BAŞARILI yüklendi:', currentContent?.name);
-              }}
-            />
+              activeOpacity={1}
+              onPress={toggleControls}>
+              <Image
+                key={`image-${currentContent.id}-${mediaInstanceKey}`}
+                source={{ uri: getFileUri(currentContent) }}
+                style={styles.media}
+                resizeMode="cover"
+                resizeMethod="resize"
+                onError={(error: any) => {
+                  console.log('[Image] Hata:', error?.nativeEvent?.error);
+                  handleImageError(error);
+                }}
+                onLoad={() => {
+                  console.log('[Image] Yüklendi:', currentContent?.name);
+                }}
+              />
+            </TouchableOpacity>
           ) : currentContent.type === 'ticker' ? (
-            <View style={[styles.media, styles.tickerContainer]}>
-              {/* Başlık - Sabit ortada */}
+            <TouchableOpacity
+              style={[styles.media, styles.tickerContainer]}
+              activeOpacity={1}
+              onPress={toggleControls}>
               <Text style={styles.tickerTitle}>
                 {currentContent.name || currentContent.title || 'Duyuru'}
               </Text>
-              {/* Kayan Yazı - ticker_text alanından */}
               <View style={styles.tickerTextContainer}>
                 <TickerText
                   text={currentContent.ticker_text || currentContent.description || currentContent.text || 'Hoş geldiniz!'}
                 />
               </View>
-            </View>
+            </TouchableOpacity>
           ) : (
-            <View style={[styles.media, styles.templateContainer]}>
+            <TouchableOpacity
+              style={[styles.media, styles.templateContainer]}
+              activeOpacity={1}
+              onPress={toggleControls}>
               <Text style={styles.templateText}>
                 {currentContent.title || currentContent.name || currentContent.description || 'İçerik'}
               </Text>
-            </View>
+            </TouchableOpacity>
           )}
         </Animated.View>
-      </TouchableOpacity>
+      </View>
 
       {currentContent?.type === 'video' && (
         <View style={styles.videoTimerContainer}>
@@ -1032,6 +997,10 @@ const styles = StyleSheet.create({
   media: {
     width: '100%',
     height: '100%',
+  },
+  videoTouchOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
   },
   templateContainer: {
     justifyContent: 'center',
