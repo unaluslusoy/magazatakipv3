@@ -595,27 +595,22 @@ const PlayerScreen = () => {
 
   const getFileUri = (content: Content | null) => {
     if (!content) {
-      console.log('PlayerScreen: Content null!');
       return '';
     }
 
     // Önbellekteki dosya varsa her zaman onu kullan (offline destek)
     if (content.local_path) {
-      // RN'de yerel dosya için file:// prefix'i ekle
       const localUri = content.local_path.startsWith('file://')
         ? content.local_path
         : `file://${content.local_path}`;
-      console.log('PlayerScreen: local_path kullanılıyor:', localUri);
       return localUri;
     }
 
     // Online URL'yi hazırla
     let path = content.file_url || content.url || '';
 
-    console.log('PlayerScreen: getFileUri - raw path:', path, 'type:', content.type);
-
     if (!path) {
-      console.log('PlayerScreen: URL bulunamadı, içerik:', content.name || content.id);
+      console.log('[Media] URL bulunamadı:', content.name || content.id, 'Tip:', content.type);
       return '';
     }
 
@@ -624,7 +619,6 @@ const PlayerScreen = () => {
 
     // Eğer zaten tam URL ise direkt döndür
     if (path.startsWith('http://') || path.startsWith('https://')) {
-      console.log('PlayerScreen: Tam URL kullanılıyor:', path);
       return path;
     }
 
@@ -636,13 +630,12 @@ const PlayerScreen = () => {
       path = path.substring(1);
     }
 
-    // images/ veya videos/ ile başlıyorsa uploads/ prefix'i ekle
-    if (path.startsWith('images/') || path.startsWith('videos/')) {
+    // images/, videos/ veya audios/ ile başlıyorsa uploads/ prefix'i ekle
+    if (path.startsWith('images/') || path.startsWith('videos/') || path.startsWith('audios/')) {
       path = `uploads/${path}`;
     }
 
     const fullUrl = `${baseUrl}/${path}`;
-    console.log('PlayerScreen: Full URL oluşturuldu:', fullUrl);
     return fullUrl;
   };
 
@@ -683,14 +676,34 @@ const PlayerScreen = () => {
   };
 
   const ensureOfflineCopies = useCallback(async (contents: any[], forceDownload = false) => {
+    // Sadece video, audio ve image tiplerini indir
+    const downloadableTypes = ['video', 'audio', 'image'];
+
     for (const item of contents) {
       const content = item.content || item;
+
+      // İndirilebilir tip mi kontrol et
+      if (!downloadableTypes.includes(content.type)) {
+        continue;
+      }
+
+      // URL var mı kontrol et
+      const fileUrl = content.file_url || content.url;
+      if (!fileUrl) {
+        console.log('[Download] URL yok, atlaniyor:', content?.name, 'Tip:', content.type);
+        continue;
+      }
+
       const needsDownload = forceDownload || !content.local_path;
-      if (!needsDownload) continue;
+      if (!needsDownload) {
+        continue;
+      }
+
       try {
+        console.log('[Download] Indiriliyor:', content?.name, 'Tip:', content.type);
         await DownloadManager.downloadContent(content);
       } catch (err) {
-        console.log('PlayerScreen: İndirme hatası:', content?.name || content?.id, err);
+        console.log('[Download] Hata:', content?.name || content?.id, err);
       }
     }
   }, []);

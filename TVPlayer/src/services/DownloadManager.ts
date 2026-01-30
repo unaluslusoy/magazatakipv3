@@ -486,6 +486,9 @@ class DownloadManager {
         case 'video':
           ext = 'mp4';
           break;
+        case 'audio':
+          ext = 'mp3';
+          break;
         default:
           ext = 'bin';
       }
