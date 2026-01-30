@@ -174,7 +174,7 @@ const PlayerScreen = () => {
 
   // Video içerik değişince sayaçları ve yeniden başlatma durumunu sıfırla
   useEffect(() => {
-    if (!currentContent || currentContent.type !== 'video') return;
+    if (!currentContent || (currentContent.type !== 'video' && currentContent.type !== 'audio')) return;
     setVideoSeconds(0);
     setVideoDuration(0);
     setVideoRestartCount(0);
@@ -559,12 +559,12 @@ const PlayerScreen = () => {
     }, 2000);
   }, [playNext]);
 
-  // Auto-advance for images, ticker, and other non-video content
+  // Auto-advance for images, ticker, and other non-video/audio content
   useEffect(() => {
     if (!currentContent) return;
 
-    // Video kendi kendine ilerler (onEnd callback ile)
-    if (currentContent.type === 'video') {
+    // Video ve audio kendi kendine ilerler (onEnd callback ile)
+    if (currentContent.type === 'video' || currentContent.type === 'audio') {
       return;
     }
 
@@ -702,9 +702,9 @@ const PlayerScreen = () => {
     return `${mm}:${ss}`;
   };
 
-  // Video takılma izleme: ilerleme yoksa player'ı yeniden başlat
+  // Video/Audio takılma izleme: ilerleme yoksa player'ı yeniden başlat
   useEffect(() => {
-    if (!currentContent || currentContent.type !== 'video') return;
+    if (!currentContent || (currentContent.type !== 'video' && currentContent.type !== 'audio')) return;
 
     let stallCount = 0;
     const maxStallCount = 3; // 3 kontrol sonrası yeniden başlat
@@ -716,14 +716,15 @@ const PlayerScreen = () => {
       // 10 saniyeden fazla ilerleme yoksa
       if (idleMs > 10000 && lastProgressRef.current > 0) {
         stallCount++;
-        console.log('PlayerScreen: Video takılma tespit edildi', {
+        console.log('[Media] Takılma tespit edildi', {
+          type: currentContent.type,
           idleMs,
           stallCount,
           position: lastProgressRef.current
         });
 
         if (stallCount >= maxStallCount) {
-          console.log('PlayerScreen: Video takıldı, yeniden başlatılıyor...');
+          console.log('[Media] Takıldı, yeniden başlatılıyor...');
           stallCount = 0;
           resumeAtRef.current = lastProgressRef.current;
           setMediaInstanceKey(prev => prev + 1);
@@ -863,6 +864,66 @@ const PlayerScreen = () => {
                 onPress={toggleControls}
               />
             </>
+          ) : currentContent.type === 'audio' ? (
+            <>
+              {/* Audio Player - Arka planda çalar, görsel olarak ses simgesi gösterir */}
+              <Video
+                key={`audio-${currentContent.id}-${mediaInstanceKey}`}
+                source={{ uri: getFileUri(currentContent) }}
+                style={styles.audioHidden}
+                audioOnly={true}
+                repeat={false}
+                paused={false}
+                ignoreSilentSwitch="ignore"
+                playInBackground={false}
+                playWhenInactive={false}
+                progressUpdateInterval={1000}
+                ref={videoRef}
+                onEnd={() => {
+                  console.log('[Audio] onEnd - Süre:', lastProgressRef.current);
+                  handleVideoEnd();
+                }}
+                onError={(error: any) => {
+                  console.log('[Audio] Hata:', error?.error?.errorString || JSON.stringify(error));
+                  handleVideoError(error);
+                }}
+                onLoad={(data: any) => {
+                  const duration = data?.duration || 0;
+                  console.log('[Audio] Yüklendi:', currentContent?.name, 'Süre:', Math.round(duration), 's');
+                  setVideoDuration(duration);
+                  setVideoRestartCount(0);
+                  lastProgressRef.current = 0;
+                  lastProgressAtRef.current = Date.now();
+                }}
+                onProgress={(data: any) => {
+                  const t = data?.currentTime || 0;
+                  setVideoSeconds(t);
+                  lastProgressRef.current = t;
+                  lastProgressAtRef.current = Date.now();
+                }}
+              />
+              {/* Audio görsel arayüzü */}
+              <TouchableOpacity
+                style={[styles.media, styles.audioContainer]}
+                activeOpacity={1}
+                onPress={toggleControls}>
+                <Text style={styles.audioIcon}>🎵</Text>
+                <Text style={styles.audioTitle}>
+                  {currentContent.name || currentContent.title || 'Ses Dosyası'}
+                </Text>
+                <View style={styles.audioProgressContainer}>
+                  <View
+                    style={[
+                      styles.audioProgressBar,
+                      { width: videoDuration > 0 ? `${(videoSeconds / videoDuration) * 100}%` : '0%' }
+                    ]}
+                  />
+                </View>
+                <Text style={styles.audioTime}>
+                  {formatTime(videoSeconds)} / {formatTime(videoDuration)}
+                </Text>
+              </TouchableOpacity>
+            </>
           ) : currentContent.type === 'image' ? (
             <TouchableOpacity
               style={styles.media}
@@ -1001,6 +1062,45 @@ const styles = StyleSheet.create({
   videoTouchOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
+  },
+  audioHidden: {
+    width: 0,
+    height: 0,
+    opacity: 0,
+  },
+  audioContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a2e',
+  },
+  audioIcon: {
+    fontSize: 120,
+    marginBottom: scaleHeight(30),
+  },
+  audioTitle: {
+    fontSize: scaleFont(36),
+    color: '#fff',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: scaleHeight(40),
+    paddingHorizontal: scaleWidth(40),
+  },
+  audioProgressContainer: {
+    width: '70%',
+    height: scaleHeight(12),
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: scaleWidth(6),
+    overflow: 'hidden',
+    marginBottom: scaleHeight(20),
+  },
+  audioProgressBar: {
+    height: '100%',
+    backgroundColor: '#3DDC84',
+    borderRadius: scaleWidth(6),
+  },
+  audioTime: {
+    fontSize: scaleFont(24),
+    color: '#aaa',
   },
   templateContainer: {
     justifyContent: 'center',
