@@ -3,19 +3,19 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- M -->
-    <path
-        android:strokeColor="#3DDC84"
-        android:strokeWidth="8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M 24,78 L 24,30 L 40,55 L 56,30 L 56,78"/>
 
-    <!-- P -->
+    <!-- Arka plan daire -->
     <path
-        android:strokeColor="#3DDC84"
-        android:strokeWidth="8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M 68,78 L 68,30 L 88,30 L 88,54 L 68,54"/>
+        android:fillColor="#3DDC84"
+        android:pathData="M54,54m-32,0a32,32 0,1 1,64 0a32,32 0,1 1,-64 0"/>
+
+    <!-- M harfi - kalın ve modern -->
+    <path
+        android:fillColor="#1a1a1a"
+        android:pathData="M28,68 L28,40 L28,40 L38,55 L48,40 L48,68 L44,68 L44,50 L38,60 L32,50 L32,68 Z"/>
+
+    <!-- P harfi - kalın ve modern -->
+    <path
+        android:fillColor="#1a1a1a"
+        android:pathData="M56,68 L56,40 L72,40 Q80,40 80,48 Q80,56 72,56 L60,56 L60,68 Z M60,44 L60,52 L70,52 Q74,52 74,48 Q74,44 70,44 Z"/>
 </vector>
